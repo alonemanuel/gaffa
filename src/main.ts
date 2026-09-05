@@ -1,6 +1,6 @@
 import './style.css';
 import { PHASES, tacticById, tacticsForPhase } from './data';
-import { FORMATIONS, formationById } from './formations';
+import { FORMATIONS } from './formations';
 import { mountAnimation, mountFormationPitch, type AnimationHandle } from './pitch';
 import type { Formation, Tactic } from './types';
 
@@ -61,79 +61,119 @@ const renderHome = (): void => {
     </div>`;
 };
 
-const renderFormations = (): void => {
-  const cards = FORMATIONS.map(
+const renderFormations = (startId?: string): void => {
+  const requested = FORMATIONS.findIndex((f) => f.id === startId);
+  const startIndex = requested === -1 ? 0 : requested;
+
+  const pills = FORMATIONS.map(
+    (formation, index) =>
+      `<button class="pill${index === startIndex ? ' active' : ''}" data-index="${index}">${esc(formation.name)}</button>`,
+  ).join('');
+
+  const slides = FORMATIONS.map(
     (formation) => `
-      <a class="card tactic-card" href="#/formation/${formation.id}">
-        <span class="chip">${esc(formation.nickname)}</span>
-        <span class="tactic-title">${esc(formation.name)}</span>
-        <span class="tactic-problem">${esc(formation.summary.split('.')[0])}.</span>
-      </a>`,
+      <div class="slide">
+        <div class="pitch-wrap">
+          <div class="pitch-host formation-host" data-formation="${formation.id}"></div>
+          <p class="slide-caption">${esc(formation.nickname)}</p>
+        </div>
+      </div>`,
   ).join('');
 
   root.innerHTML = `
     <div class="screen">
       ${topBar('Formations', '#/')}
-      <p class="phase-lead">Pick a shape, then tap a position to see exactly what that player is meant to do.</p>
-      <div class="stack">${cards}</div>
-    </div>`;
-};
-
-const renderFormation = (formationId: string): void => {
-  const formation = formationById(formationId);
-  if (!formation) {
-    location.hash = '#/formations';
-    return;
-  }
-  const list = (items: string[]): string => items.map((item) => `<li>${esc(item)}</li>`).join('');
-
-  root.innerHTML = `
-    <div class="screen">
-      ${topBar(formation.name, '#/formations')}
-      <div class="pitch-wrap">
-        <div class="pitch-host formation-host" id="formation-host"></div>
-        <p class="tap-hint" id="tap-hint">Tap a position</p>
-      </div>
+      <div class="pills" id="pills">${pills}</div>
+      <div class="carousel" id="carousel">${slides}</div>
+      <p class="tap-hint" id="tap-hint">Swipe for another shape · tap a position</p>
       <div id="position-detail"></div>
-      <section class="body">
-        <h2>The shape</h2>
-        <p class="idea">${esc(formation.summary)}</p>
-        <h2>Good for</h2>
-        <ul class="bullets good">${list(formation.strengths)}</ul>
-        <h2>Watch out for</h2>
-        <ul class="bullets bad">${list(formation.weaknesses)}</ul>
-      </section>
+      <section class="body" id="formation-body"></section>
     </div>`;
 
-  wireFormation(formation);
+  wireFormations(startIndex);
 };
 
-const wireFormation = (formation: Formation): void => {
-  const host = document.getElementById('formation-host');
-  const detail = document.getElementById('position-detail');
+const wireFormations = (startIndex: number): void => {
+  const carousel = document.getElementById('carousel');
+  const pills = document.getElementById('pills');
   const hint = document.getElementById('tap-hint');
-  if (!host || !detail || !hint) return;
+  const detail = document.getElementById('position-detail');
+  const body = document.getElementById('formation-body');
+  if (!carousel || !pills || !hint || !detail || !body) return;
 
-  const pitch = mountFormationPitch(
-    host,
-    formation.positions.map((position) => ({ id: position.id, spot: position.spot })),
-    (id) => {
-      const position = formation.positions.find((p) => p.id === id);
-      if (!position) return;
-      pitch.select(id);
-      hint.textContent = position.name;
-      detail.innerHTML = `
-        <section class="position-card">
-          <h3>${esc(position.name)}</h3>
-          <p class="position-purpose">${esc(position.purpose)}</p>
-          <h4 class="job attack">In possession</h4>
-          <ul class="bullets">${position.attacking.map((j) => `<li>${esc(j)}</li>`).join('')}</ul>
-          <h4 class="job defend">Out of possession</h4>
-          <ul class="bullets">${position.defending.map((j) => `<li>${esc(j)}</li>`).join('')}</ul>
-          <p class="suits"><span>Who to put here</span>${esc(position.suits)}</p>
-        </section>`;
-    },
-  );
+  const hosts = [...carousel.querySelectorAll<HTMLElement>('.formation-host')];
+  const selectors = hosts.map((host, index) => {
+    const formation = FORMATIONS[index];
+    const pitch = mountFormationPitch(
+      host,
+      formation.positions.map((position) => ({ id: position.id, spot: position.spot })),
+      (id) => showPosition(formation, id, pitch, hint, detail),
+    );
+    return pitch;
+  });
+
+  const list = (items: string[]): string => items.map((item) => `<li>${esc(item)}</li>`).join('');
+  const showFormation = (index: number): void => {
+    const formation = FORMATIONS[index];
+    for (const [i, pill] of [...pills.children].entries()) pill.classList.toggle('active', i === index);
+    for (const selector of selectors) selector.select('');
+    hint.textContent = 'Tap a position';
+    detail.innerHTML = '';
+    body.innerHTML = `
+      <h2>The shape</h2>
+      <p class="idea">${esc(formation.summary)}</p>
+      <h2>Good for</h2>
+      <ul class="bullets good">${list(formation.strengths)}</ul>
+      <h2>Watch out for</h2>
+      <ul class="bullets bad">${list(formation.weaknesses)}</ul>`;
+  };
+
+  let active = startIndex;
+  carousel.addEventListener('scroll', () => {
+    const index = Math.round(carousel.scrollLeft / carousel.clientWidth);
+    if (index === active || !FORMATIONS[index]) return;
+    active = index;
+    showFormation(index);
+  });
+
+  pills.addEventListener('click', (event) => {
+    const target = (event.target as HTMLElement).closest<HTMLElement>('.pill');
+    if (!target) return;
+    const index = Number(target.dataset.index);
+    carousel.scrollTo({ left: index * carousel.clientWidth, behavior: 'smooth' });
+  });
+
+  showFormation(startIndex);
+  // Jump rather than glide on first paint, and re-assert next frame — the browser
+  // restores the previous scroll offset after we set it, which would land on the wrong shape.
+  const jump = (): void => {
+    carousel.scrollLeft = startIndex * carousel.clientWidth;
+  };
+  jump();
+  requestAnimationFrame(jump);
+};
+
+const showPosition = (
+  formation: Formation,
+  id: string,
+  pitch: { select: (id: string) => void },
+  hint: HTMLElement,
+  detail: HTMLElement,
+): void => {
+  const position = formation.positions.find((p) => p.id === id);
+  if (!position) return;
+  pitch.select(id);
+  hint.textContent = position.name;
+  detail.innerHTML = `
+    <section class="position-card">
+      <h3>${esc(position.name)}</h3>
+      <p class="position-purpose">${esc(position.purpose)}</p>
+      <h4 class="job attack">In possession</h4>
+      <ul class="bullets">${position.attacking.map((job) => `<li>${esc(job)}</li>`).join('')}</ul>
+      <h4 class="job defend">Out of possession</h4>
+      <ul class="bullets">${position.defending.map((job) => `<li>${esc(job)}</li>`).join('')}</ul>
+      <p class="suits"><span>Who to put here</span>${esc(position.suits)}</p>
+    </section>`;
 };
 
 const renderPhase = (phaseId: string): void => {
@@ -250,7 +290,7 @@ const render = (): void => {
   const formationMatch = hash.match(/^\/formation\/(.+)$/);
 
   if (tacticMatch) renderTactic(tacticMatch[1]);
-  else if (formationMatch) renderFormation(formationMatch[1]);
+  else if (formationMatch) renderFormations(formationMatch[1]);
   else if (hash === '/formations') renderFormations();
   else if (phaseMatch) renderPhase(phaseMatch[1]);
   else renderHome();
