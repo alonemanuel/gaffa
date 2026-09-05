@@ -1,3 +1,5 @@
+import type { IconName } from './icons';
+
 /** Pitch coordinates. x: 0 (left touchline) -> 40 (right). y: 0 (our goal line) -> 60 (their goal line). */
 export type Pt = [number, number];
 
@@ -12,7 +14,7 @@ export interface Phase {
   id: PhaseId;
   name: string;
   blurb: string;
-  icon: string;
+  icon: IconName;
 }
 
 export interface Frame {

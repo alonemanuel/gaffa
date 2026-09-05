@@ -1,5 +1,6 @@
 import './style.css';
 import { PHASES, tacticById, tacticsForPhase } from './data';
+import { icon } from './icons';
 import { FORMATIONS } from './formations';
 import { mountAnimation, mountFormationPitch, type AnimationHandle } from './pitch';
 import type { Formation, Tactic } from './types';
@@ -20,7 +21,7 @@ const esc = (value: string): string => {
 };
 
 const topBar = (title: string, backHref: string | null): string => {
-  const back = backHref ? `<a class="back" href="${backHref}" aria-label="Back">←</a>` : '<span class="back-spacer"></span>';
+  const back = backHref ? `<a class="back" href="${backHref}" aria-label="Back">${icon('back')}</a>` : '<span class="back-spacer"></span>';
   const bar = `<header class="topbar">${back}<h1>${esc(title)}</h1></header>`;
   return bar;
 };
@@ -30,7 +31,7 @@ const renderHome = (): void => {
     const count = tacticsForPhase(phase.id).length;
     return `
       <a class="card phase-card" href="#/phase/${phase.id}">
-        <span class="phase-icon">${phase.icon}</span>
+        <span class="phase-icon">${icon(phase.icon)}</span>
         <span class="phase-text">
           <span class="phase-name">${esc(phase.name)}</span>
           <span class="phase-blurb">${esc(phase.blurb)}</span>
@@ -47,7 +48,7 @@ const renderHome = (): void => {
       </header>
       <p class="section-label">Build a formation</p>
       <a class="card formation-entry" href="#/formations">
-        <span class="phase-icon">📐</span>
+        <span class="phase-icon">${icon('formation')}</span>
         <span class="phase-text">
           <span class="phase-name">Formations</span>
           <span class="phase-blurb">Tap any position to see its job, attacking and defending</span>
@@ -225,8 +226,8 @@ const renderTactic = (tacticId: string): void => {
         <div class="pitch-host" id="pitch-host"></div>
         <p class="note" id="note"></p>
         <div class="controls">
-          <button class="ctrl" id="restart" aria-label="Restart">↻</button>
-          <button class="ctrl primary" id="playpause" aria-label="Play or pause">▶</button>
+          <button class="ctrl" id="restart" aria-label="Restart">${icon('restart')}</button>
+          <button class="ctrl primary" id="playpause" aria-label="Play or pause">${icon('play')}</button>
           <input class="scrub" id="scrub" type="range" min="0" max="1000" value="0" aria-label="Scrub" />
         </div>
       </div>
@@ -260,7 +261,8 @@ const wireTactic = (tactic: Tactic): void => {
       if (!scrubbing) scrub.value = String(Math.round(fraction * 1000));
     },
     onPlayState: (playing) => {
-      playpause.textContent = playing ? '❚❚' : '▶';
+      playpause.innerHTML = icon(playing ? 'pause' : 'play');
+      playpause.setAttribute('aria-label', playing ? 'Pause' : 'Play');
     },
   });
 

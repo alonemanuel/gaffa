@@ -5,31 +5,31 @@ export const PHASES: Phase[] = [
     id: 'our-goal-kick',
     name: 'Our goal kick',
     blurb: 'Getting out from the back without hoofing it',
-    icon: '🥅',
+    icon: 'goal',
   },
   {
     id: 'attacking',
     name: 'Attacking',
     blurb: 'We have it in their half and need an idea',
-    icon: '⚡',
+    icon: 'attack',
   },
   {
     id: 'their-goal-kick',
     name: 'Their goal kick',
     blurb: 'Pressing high, and how to do it with six players',
-    icon: '🎯',
+    icon: 'press',
   },
   {
     id: 'defending',
     name: 'Defending',
     blurb: 'Shape, cover, and who is allowed to leave it',
-    icon: '🛡️',
+    icon: 'shield',
   },
   {
     id: 'transition',
     name: 'Transitions',
     blurb: 'The seconds right after the ball changes hands',
-    icon: '🔄',
+    icon: 'transition',
   },
 ];
 
