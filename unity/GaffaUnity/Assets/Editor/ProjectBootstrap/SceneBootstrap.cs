@@ -51,6 +51,7 @@ namespace ProjectBootstrap
             var director = new GameObject("MomentDirector").AddComponent<MomentDirector>();
             director.OurKit = LoadOrCreateMaterial("Assets/Gaffa/Materials/KitUs.mat", new Color(1f, 0.85f, 0.3f));
             director.TheirKit = LoadOrCreateMaterial("Assets/Gaffa/Materials/KitThem.mat", new Color(0.9f, 0.22f, 0.39f));
+            director.gameObject.AddComponent<DebugControls>().Director = director;
 
             // Camera
             var camGo = new GameObject("Main Camera");
