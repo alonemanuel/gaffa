@@ -1,0 +1,17 @@
+{
+  "name": "Gaffa.Runtime",
+  "rootNamespace": "Gaffa.Runtime",
+  "references": [
+    "Gaffa.Engine",
+    "Unity.InputSystem"
+  ],
+  "includePlatforms": [],
+  "excludePlatforms": [],
+  "allowUnsafeCode": false,
+  "overrideReferences": false,
+  "precompiledReferences": [],
+  "autoReferenced": true,
+  "defineConstraints": [],
+  "versionDefines": [],
+  "noEngineReferences": false
+}
