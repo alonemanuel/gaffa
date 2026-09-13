@@ -1,7 +1,7 @@
 {
-  "name": "gaffa",
+  "name": "gaffa-moments",
   "private": true,
-  "version": "0.0.0",
+  "version": "0.1.0",
   "type": "module",
   "scripts": {
     "dev": "vite --port 5180 --strictPort --host",
@@ -9,7 +9,11 @@
     "preview": "vite preview --port 5180"
   },
   "devDependencies": {
+    "@types/three": "^0.170.0",
     "typescript": "^5.7.2",
     "vite": "^6.0.7"
+  },
+  "dependencies": {
+    "three": "^0.170.0"
   }
 }
