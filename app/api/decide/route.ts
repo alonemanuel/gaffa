@@ -20,10 +20,20 @@ export const maxDuration = 30;
 
 const MODEL = 'typesafe-ai/jev';
 
-/** FORCE_MOCK=1 runs the whole game on the stand-in, so testing costs nothing. */
+/**
+ * Whether to call Jev at all.
+ *
+ * On Vercel the gateway authenticates from the deployment's own identity, and
+ * the OIDC token is not necessarily readable as an environment variable inside
+ * the function, so `VERCEL` being set is the signal there. Locally it is the
+ * token that `vercel env pull` wrote. `FORCE_MOCK=1` overrides both, which is
+ * how UI work is done without spending anything.
+ */
 const hasGateway = (): boolean =>
   process.env.FORCE_MOCK !== '1' &&
-  Boolean(process.env.AI_GATEWAY_API_KEY || process.env.VERCEL_OIDC_TOKEN);
+  Boolean(
+    process.env.AI_GATEWAY_API_KEY || process.env.VERCEL_OIDC_TOKEN || process.env.VERCEL,
+  );
 
 /**
  * Concurrent calls sometimes come back 503, Service temporarily unavailable,
