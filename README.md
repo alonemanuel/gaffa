@@ -1,106 +1,204 @@
 # Gaffa
 
-A 7v7 football simulation you can pause, step through one decision at a time, and
-interrogate. Tap any player and it tells you exactly why he moved or passed where
-he did, using the numbers the engine actually used.
+A 7v7 football simulation you can pause and interrogate. Players move and pass.
+Tap any player and it shows what he believes, the job he was given, what he
+decided to do about it, and every alternative he weighed.
 
-The long-term goal is a phone game that teaches tactics: watch a match, change
-shape and instructions while it runs, and see the consequence. This repo is the
-engine being built up one rung at a time.
+Decisions come from [Jev](https://docs.typesafe.ai), a System One model that
+returns typed choices with probabilities instead of text. The simulation itself
+contains no hand-written football logic: no pass-scoring formula, no positioning
+weights, no tuned coefficients. What the code does is measure geometry and
+execute whatever the model decided.
 
-Open `index.html`. There is no build step and no dependencies.
+```bash
+npm install
+npm run dev
+```
+
+It runs immediately on a stand-in model, clearly labelled as such in the header.
+See **Connecting Jev** below to switch to the real thing.
+
+## What is in this build
+
+Movement and passing, and nothing else. No dribbling, no interceptions, no
+tackles, no shooting, no goals. That is deliberate. Each of those is a rung to
+add once the decision layer is right.
+
+## The model each player runs on
+
+BDI, the standard agent architecture: belief, desire, intention. The inspector
+shows all three, in that order, because each changes at a different rate.
+
+| Layer | Changes | Example | Comes from |
+|---|---|---|---|
+| Belief | every tick | "I am 2.7m from a defender and could not receive" | measured, plus two judgments from the model |
+| Task | per match | "cover the left of midfield and offer an outlet" | assigned at kickoff |
+| Intent | every beat | "show for the ball" | chosen by the model |
+| Motor target | every tick | "run to 31m, 14m at 4.0 m/s" | geometry |
 
 ## How it runs
 
-Two loops at different rates.
+Two loops.
 
 ```
-every 0.2s    retarget()   role  ->  desired point  ->  smoothed target
-every 1/120s  moveAll()    target -> velocity (capped) -> position
-              moveBall()   roll under friction
+120 Hz   physics   ball rolls under friction, players run toward their target
+1 / 1.5s  beat     the carrier plus four others re-decide
 ```
 
-A player holds an intent of the form "go to that point", and that intent is
-recomputed five times a second. Between recomputes he just runs, under a speed
-cap and an acceleration limit. The target itself is eased rather than snapped,
-and anyone within 1.3m of his spot stands still, which is what keeps the movement
-from looking frantic.
+Each beat builds **one view per player** and asks that player his own questions.
+Nobody sees anybody else's view, which is what stops the team sharing a brain.
+Two defenders can both conclude they should press, because each is reasoning
+from where he personally stands.
 
-The pitch is continuous. Positions are metres in a 60 by 40 space, and there is
-no grid.
+While a round is in flight the clock slows to 0.35x rather than stalling, and
+everyone carries on executing the intent they already hold. Real players commit
+to a run rather than re-deciding every fifth of a second.
 
-## The decision stack
+## The one design line
 
-| Tier | Rate | What it decides |
+**Geometry is measured. Judgment is asked.**
+
+"The nearest opponent is 2.1m away" is a measurement, so it lives in code.
+"Am I free?" is a judgment, so it becomes a question. That split is what keeps
+hand-tuned thresholds out, and it keeps each request small.
+
+## The questions
+
+All the football knowledge in this project is in `lib/decide/questions.ts`.
+There are no coefficients anywhere. If the team plays badly, the fix is a better
+written criterion.
+
+Every player off the ball is asked three questions, evaluated in parallel:
+
+| Question | Type | Returns |
 |---|---|---|
-| Coach | static for now | line, width, support band, how many press |
-| Roles | 5 Hz | press, cover, support, receive, hold shape |
-| Motor target | 5 Hz | a point on the pitch and a speed |
-| Physics | 120 Hz | where everyone actually ends up |
+| `key` | boolean | attacking, whether he could receive a pass. Defending, whether his man is a threat |
+| `danger` | score | how much trouble his team is in, across three levels |
+| `intent` | choice | one of five intents, with a probability for each |
 
-The Brain button shows all four tiers live while the match runs, including which
-roles changed on the last cycle.
+The first one changes with the side of the ball. Asking a defender whether he
+could receive a pass returns a number that means nothing, because his team does
+not have the ball to give him.
 
-## The policies, in full
+The man on the ball is asked two more in the same call: who to pass to, over a
+list of team-mates annotated with how tightly each is marked and how blocked the
+lane to him is, and how far ahead of the receiver to aim.
 
-Three rules drive everything. They are deliberately small and deliberately
-visible, because the next step is replacing them with something learned and you
-need a baseline to beat.
+**Confidence gates the switch.** Jev reports how concentrated a distribution is,
+separately from the winning probability. When confidence is below 25% the player
+keeps the intent he already had, and the inspector says so. That removes the
+jitter you would otherwise get from re-deciding every second.
 
-| Policy | The rule |
-|---|---|
-| Pass choice | `forward metres x 0.16 - range x 0.05`, minus 0.90 for returning it to the player who just gave it to you, then a softmax at temperature 0.45 |
-| Support position | step off any opponent inside 7m at 0.42x, unstack from a team-mate inside 6m at 0.30x, hold a 9m to 22m band from the ball |
-| Press | rank yourself by time to the ball, go if your rank is below the coach's number, stop 1.6m short |
+## Latency and the 503s
 
-Nobody is assigned to press. Each defender estimates his own time to the ball,
-guesses the same for each team-mate from where he can see them standing, and
-counts how many he thinks beat him there. Every player carries a personal bias in
-how he rates others, so two of them can both believe they are quickest and both
-go. There is no shared brain and no central allocator.
+A round of five concurrent calls lands in roughly 500 to 800ms. Jev itself
+answers a single call in about 300 to 450ms.
+
+Under concurrency the gateway intermittently returns **503, Service temporarily
+unavailable**, which is capacity on the model's side rather than a rate limit or
+anything about the request. Those failures come back fast, at about half a
+second, and a retry has always worked. Three things handle it:
+
+- The round's calls are staggered 90ms apart, which makes a 503 much rarer.
+- The SDK's own retry is off, because it waits two seconds before trying again
+  and that turns one bad call into a visible stall. `withRetry` in the route
+  waits 160ms, then 320ms, instead.
+- Each call is caught on its own, so a player who cannot be reached falls back
+  to the stand-in for that beat while everybody else gets a real answer.
+
+Worst case for a round is now around 1.2s rather than 2.8s. Every knob here is
+an environment variable: `JEV_RETRIES`, `JEV_RETRY_WAIT_MS`, `JEV_STAGGER_MS`.
+
+## Connecting Jev
+
+Access is through Vercel AI Gateway, so there is no TypeSafe API key to manage.
+
+```bash
+npm i -g vercel
+vercel login
+vercel link
+vercel env pull
+```
+
+That writes a `VERCEL_OIDC_TOKEN` to your environment file, which the AI SDK
+uses to route `typesafe-ai/jev` through the gateway. The token lasts 12 hours
+locally, so re-run `vercel env pull` when a request starts returning 401.
+Deployments get one automatically.
+
+Jev also needs purchased credits rather than just a card on file, and Zero Data
+Retention is a Pro-plan feature, so it stays off unless you set `GATEWAY_ZDR=1`.
+
+With no token present, `/api/decide` falls back to the stand-in model in
+`lib/decide/mock.ts` and says so in the response. That model is crude on
+purpose. It exists so the plumbing runs without auth, and it is labelled `mock`
+everywhere so it is never mistaken for a real answer.
+
+To work on the game without spending anything, run the mock-only server:
+
+```bash
+npm run dev:mock     # port 5181, never calls Jev
+```
+
+Cost, for reference: a carrier's call is about 1,600 input tokens and an
+off-ball call rather less. Five calls a beat at a beat every 1.5 seconds puts a
+five-minute match at roughly four to six cents, with output tokens unmetered.
+
+## Who decides on each beat
+
+Not everybody. The man on the ball always decides, because his choice is the one
+that moves the game. The others take turns four at a time, so each re-decides
+about every third beat. That is a tenth of the traffic of asking everyone every
+beat, and it is closer to how a team behaves, since players do not all
+reconsider in lockstep.
+
+## Layout
+
+```
+app/page.tsx            the match loop and the chrome
+app/api/decide/route.ts one decision round, staggered parallel calls
+components/Pitch.tsx    canvas, portrait, blue attacks up
+components/Inspector.tsx belief, task, intent, alternatives
+lib/types.ts            the vocabulary every layer shares
+lib/pitch.ts            geometry and ball physics
+lib/view.ts             match state to one view per player
+lib/decide/questions.ts every football judgment in the project
+lib/decide/mock.ts      the stand-in
+lib/sim/engine.ts       the two loops
+lib/sim/motor.ts        intent to a point on the grass
+scripts/smoke.mjs       one call, one question, cheapest possible check
+scripts/probe.mjs       one frozen position where the right answer is known
+scripts/latency.mjs     eight sequential calls, timed
+scripts/burst.mjs       five concurrent calls, to reproduce the 503s
+legacy/standalone.html  the earlier single-file prototype
+```
 
 ## Ball physics
 
-The ball is a free body. It is struck with a velocity and rolls under friction:
+The ball is a free body struck with a velocity and rolling under friction:
 
 ```
 dv/dt = -(0.90 + 0.0115 * v^2)
 ```
 
-The constant term is the turf and the quadratic term is the air. Nothing animates
-the ball along a path and nothing decides in advance when it arrives.
+The constant term is the turf, the quadratic is the air. `solveKick` binary
+searches the strike speed so a pass arrives still doing about 5 m/s.
+`interceptPoint` rolls the ball forward to find the earliest point a player can
+reach in time, which is how a receiver decides where to run. The same function
+will become the interception check.
 
-`solveKick` binary-searches the strike speed so a pass arrives still doing about
-5 m/s. `interceptPoint` rolls the ball forward to find the earliest point a given
-player can reach in time, which is how a receiver decides where to run. That same
-function is what an interception will use.
+## Does Jev understand a pitch
 
-## Controls
+Yes. `scripts/probe.mjs` freezes a position where the football answer is
+unambiguous: the carrier is pressed, one forward is high and free with a clear
+lane, everything else is square or backwards. Jev picks the forward at 80%.
 
-| Control | What it does |
-|---|---|
-| Pause | stops the clock |
-| 1x | cycles 1x, 2x, 4x |
-| Step | advances one unit while paused |
-| Brain | opens the live decision stack |
-| Reset | new seed |
-| tap a player | pauses and explains his last decision |
+The telling part is the two square options. Both sit the same distance away on
+opposite flanks, differing only in that one has an opponent 1.1m off the passing
+lane and the other 2.4m. Jev gave the first **0.0%** and the second 5%. Nobody
+wrote a lane-blocking rule. It read the number and understood what it meant.
 
-Step size is set inside the Brain panel and can be one decision cycle (0.2s), one
-physics tick (1/120s), or one ball event. The seed lives in the URL hash, so
-`#12345` replays the same match.
+## Next
 
-## Where this is going
-
-- **P0** fixed positions, players pass. Done.
-- **P1** players move, ball has real physics. Done.
-- **P2** dribbling.
-- **P3** interceptions, and defenders who block passing lanes.
-- **P4** shooting and goals.
-- **P5** lofted passes.
-
-Two things are missing that everything later depends on. There is no value
-function, so nothing can yet say whether a decision was good, which is the gate
-in front of both search and any learned policy. And the pass scorer contains no
-reference to the opposing team at all, so a pass straight through a defender
-scores the same as a pass into open grass.
+- Dribbling, then interceptions, then shooting.
+- A coach tier above the intents, written by an LLM once a minute, which is the
+  layer a player would actually give instructions to.

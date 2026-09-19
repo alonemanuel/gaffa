@@ -1,0 +1,24 @@
+{
+  "name": "gaffa",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "next dev -p 5180",
+    "build": "next build",
+    "start": "next start",
+    "typecheck": "tsc --noEmit",
+    "dev:mock": "FORCE_MOCK=1 next dev -p 5181"
+  },
+  "dependencies": {
+    "ai": "^7.0.105",
+    "next": "^15.5.4",
+    "react": "^19.1.1",
+    "react-dom": "^19.1.1"
+  },
+  "devDependencies": {
+    "@types/node": "^22.10.0",
+    "@types/react": "^19.1.0",
+    "@types/react-dom": "^19.1.0",
+    "typescript": "^5.7.0"
+  }
+}
