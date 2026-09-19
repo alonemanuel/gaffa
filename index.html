@@ -1,0 +1,1111 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Gaffa P1</title>
+<style>
+  :root {
+    --bg: #0d1117;
+    --panel: #161b22;
+    --line: #26303c;
+    --text: #e6edf3;
+    --muted: #8b949e;
+    --us: #4b9cf5;
+    --them: #f2564c;
+  }
+  * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+  html, body {
+    margin: 0; height: 100%;
+    background: var(--bg); color: var(--text);
+    font: 14px/1.4 ui-sans-serif, -apple-system, "SF Pro Text", system-ui, sans-serif;
+    overscroll-behavior: none;
+  }
+  body { display: flex; flex-direction: column; align-items: center; padding: 8px 8px 0; gap: 8px; }
+  #hud {
+    width: 100%; max-width: 480px;
+    display: flex; align-items: center; gap: 10px;
+    padding: 8px 12px; border: 1px solid var(--line); border-radius: 10px;
+    background: var(--panel);
+  }
+  #clock { font-variant-numeric: tabular-nums; font-size: 17px; font-weight: 600; letter-spacing: .5px; }
+  #poss { display: flex; align-items: center; gap: 6px; color: var(--muted); font-size: 12px; }
+  #possDot { width: 9px; height: 9px; border-radius: 50%; background: var(--us); }
+  #right { margin-left: auto; text-align: right; color: var(--muted); font-size: 11px; line-height: 1.25; font-variant-numeric: tabular-nums; }
+  #stage { flex: 1; width: 100%; max-width: 480px; min-height: 0; display: flex; }
+  canvas { width: 100%; height: 100%; display: block; border-radius: 12px; touch-action: manipulation; }
+  #log {
+    width: 100%; max-width: 480px; height: 42px;
+    color: var(--muted); font-size: 12px; font-variant-numeric: tabular-nums;
+    overflow: hidden; padding: 0 4px;
+  }
+  #log div { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  #log div:first-child { color: var(--text); }
+  #bar {
+    width: 100%; max-width: 480px;
+    display: flex; gap: 6px; padding-bottom: max(10px, env(safe-area-inset-bottom));
+  }
+  button {
+    flex: 1; padding: 11px 4px;
+    background: var(--panel); color: var(--text);
+    border: 1px solid var(--line); border-radius: 9px;
+    font: inherit; font-size: 13px; font-weight: 500; cursor: pointer;
+  }
+  button:active { background: #202a36; }
+  button.on { border-color: var(--us); color: var(--us); }
+  #why {
+    position: fixed; left: 0; right: 0; bottom: 0; z-index: 20;
+    max-height: 66%; overflow-y: auto;
+    background: var(--panel); border-top: 1px solid var(--line);
+    border-radius: 14px 14px 0 0;
+    padding: 14px 16px calc(16px + env(safe-area-inset-bottom));
+    box-shadow: 0 -10px 34px rgba(0,0,0,.38);
+    transform: translateY(101%); transition: transform .18s ease;
+  }
+  #why.open { transform: none; }
+  #why h3 { margin: 0; font-size: 15px; }
+  #why .sub { color: var(--muted); font-size: 12px; margin: 2px 0 10px; }
+  #why .cap { font-size: 12px; color: var(--muted); margin: 12px 0 4px; }
+  #why table { width: 100%; border-collapse: collapse; font-size: 12px; font-variant-numeric: tabular-nums; }
+  #why th { text-align: right; color: var(--muted); font-weight: 500; padding: 3px 0; }
+  #why th:first-child, #why td:first-child { text-align: left; }
+  #why td { text-align: right; padding: 4px 0; border-top: 1px solid var(--line); }
+  #why tr.pick td { color: var(--us); font-weight: 700; }
+  #why ul { margin: 4px 0 0; padding-left: 17px; }
+  #why li { margin: 4px 0; font-size: 12.5px; }
+  #why .close {
+    position: absolute; top: 8px; right: 10px;
+    background: none; border: 0; color: var(--muted);
+    font-size: 22px; width: auto; flex: none; padding: 2px 8px;
+  }
+  #brain {
+    position: fixed; left: 0; right: 0; bottom: 0; z-index: 18;
+    max-height: 58%; overflow-y: auto;
+    background: var(--panel); border-top: 1px solid var(--line);
+    border-radius: 14px 14px 0 0;
+    padding: 12px 14px calc(14px + env(safe-area-inset-bottom));
+    box-shadow: 0 -10px 34px rgba(0,0,0,.38);
+    transform: translateY(101%); transition: transform .18s ease;
+    font-variant-numeric: tabular-nums;
+  }
+  #brain.open { transform: none; }
+  #brain .tier {
+    font-size: 10.5px; letter-spacing: .09em; text-transform: uppercase;
+    color: var(--muted); margin: 12px 0 5px; padding-bottom: 4px;
+    border-bottom: 1px solid var(--line);
+  }
+  #brain .tier:first-child { margin-top: 0; }
+  #brain .row {
+    display: flex; align-items: center; gap: 8px;
+    font-size: 12px; padding: 4px 4px; border-radius: 6px; cursor: pointer;
+  }
+  #brain .row .v { margin-left: auto; color: var(--muted); text-align: right; }
+  #brain .row.sel { background: rgba(255,209,102,.14); }
+  #brain .row.head { cursor: default; font-weight: 600; }
+  #brain .row.head .v { color: var(--text); font-weight: 400; }
+  #brain .dot { width: 8px; height: 8px; border-radius: 50%; display: inline-block; }
+  #brain .dot.blue { background: var(--us); }
+  #brain .dot.red { background: var(--them); }
+  #brain .close {
+    position: absolute; top: 6px; right: 10px;
+    background: none; border: 0; color: var(--muted);
+    font-size: 22px; width: auto; flex: none; padding: 2px 8px;
+  }
+  @media (prefers-color-scheme: light) {
+    :root:not([data-theme="dark"]) {
+      --bg: #f4f6f8; --panel: #ffffff; --line: #d7dde3;
+      --text: #10161c; --muted: #5b6672;
+    }
+  }
+</style>
+</head>
+<body>
+
+<div id="hud">
+  <span id="clock">0:00</span>
+  <span id="poss"><i id="possDot"></i><span id="possName">Blue</span></span>
+  <span id="right"><span id="passes">0 passes</span><br><span id="bspeed">ball 0.0 m/s</span></span>
+</div>
+
+<div id="stage"><canvas id="c"></canvas></div>
+
+<div id="log"></div>
+
+<div id="bar">
+  <button id="playBtn">Pause</button>
+  <button id="speedBtn">1&times;</button>
+  <button id="stepBtn">Step</button>
+  <button id="brainBtn">Brain</button>
+  <button id="resetBtn">Reset</button>
+</div>
+
+<div id="brain"><button class="close" id="brainClose">&times;</button><div id="brainBody"></div></div>
+<div id="why"><button class="close" id="whyClose">&times;</button><div id="whyBody"></div></div>
+
+<script>
+'use strict';
+
+/* ------------------------------------------------------------------ *
+ * Gaffa P1
+ * 7v7. Players move and pass. No dribbling, no interceptions by the
+ * defending team, no tackles, no shooting.
+ *
+ * The ball is a free body. It is kicked with a velocity and rolls
+ * under friction. Nothing animates it along a path and nothing decides
+ * in advance when it arrives.
+ * ------------------------------------------------------------------ */
+
+const PITCH = { L: 60, W: 40 };
+
+function mulberry32(a) {
+  return function () {
+    a |= 0; a = (a + 0x6d2b79f5) | 0;
+    let t = Math.imul(a ^ (a >>> 15), 1 | a);
+    t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
+    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+  };
+}
+
+const seedFromUrl = () => {
+  const raw = location.hash.replace(/^#/, '');
+  const n = parseInt(raw, 10);
+  return Number.isFinite(n) && raw !== '' ? n >>> 0 : (Math.random() * 1e9) >>> 0;
+};
+
+const BLUE_SPOTS = [
+  [5, 20], [17, 12], [17, 28], [29, 7], [29, 20], [29, 33], [43, 20],
+];
+const RED_SPOTS = [
+  [55, 20], [45, 13], [45, 27], [33, 8], [33, 20], [33, 32], [19, 20],
+];
+
+/* --- ball physics ----------------------------------------------------
+ * A rolling football loses speed to two things: the grass, which takes
+ * a roughly constant bite, and the air, which scales with v squared.
+ *   dv/dt = -(ROLL + DRAG * v^2)
+ * At 18 m/s that is about 4.7 m/s^2, at 4 m/s about 1.1, which is why a
+ * firm pass covers ground quickly and then dies away.
+ */
+const ROLL = 0.90;         // m/s^2 from the turf
+const DRAG = 0.0115;       // per metre, from the air
+const STOPPED = 0.30;      // m/s below which the ball is dead
+const BOUNCE = 0.45;       // touchline rebound, since throw-ins do not exist yet
+const CONTROL_R = 1.35;    // metres, how close you must be to take the ball
+const ARRIVE_V = 5.0;      // m/s, the pace a pass should have when it gets there
+
+const SET_TIME = 0.35;
+const DWELL = 0.45;
+const MAX_PASS = 34;
+
+/* Players do not all move at one speed. Drifting into position is a jog,
+ * closing the ball down is a run, chasing a pass is a sprint. */
+const JOG = 1.9;           // m/s, shuffling into shape
+const RUN = 4.0;           // m/s, closing down
+const SPRINT = 5.6;        // m/s, chasing the ball
+const DEADZONE = 1.3;      // metres: inside this of your spot, stand still
+const SMOOTH = 0.22;       // how fast a player's target is allowed to change
+
+const GK_LEASH = 0.25;
+const RETARGET = 0.2;
+
+/* --- tier 1: the coach ------------------------------------------------
+ * The only numbers a manager would ever touch. Everything below reads
+ * these, so this object is where in-match instructions will plug in.
+ */
+const TACTICS = {
+  blue: { line: 0.22, width: 0.32, pressers: 1, supportMin: 9, supportMax: 22 },
+  red:  { line: 0.22, width: 0.32, pressers: 1, supportMin: 9, supportMax: 22 },
+};
+const other = (team) => (team === 'blue' ? 'red' : 'blue');
+
+const dist = (a, b) => Math.hypot(a.x - b.x, a.y - b.y);
+const clamp = (v, lo, hi) => (v < lo ? lo : v > hi ? hi : v);
+
+/** Roll a ball forward from speed v0 and report when it has covered d. */
+function rollTo(v0, d) {
+  let v = v0, s = 0, t = 0;
+  const h = 1 / 120;
+  while (s < d && v > STOPPED && t < 8) {
+    v -= (ROLL + DRAG * v * v) * h;
+    if (v < 0) v = 0;
+    s += v * h; t += h;
+  }
+  return { reached: s >= d, t, v };
+}
+
+/** How hard to strike it so it covers d and is still doing `arrive` on the way. */
+function solveKick(d, arrive) {
+  let lo = 3, hi = 32;
+  for (let i = 0; i < 20; i++) {
+    const mid = (lo + hi) / 2;
+    const r = rollTo(mid, d);
+    if (!r.reached || r.v < arrive) lo = mid; else hi = mid;
+  }
+  return (lo + hi) / 2;
+}
+
+/**
+ * The earliest point on the ball's roll that a player can get to in time.
+ * Falls back to where the ball will come to rest. P3 will hand this same
+ * function to defenders, which is what an interception is.
+ */
+function interceptPoint(p) {
+  let v = Math.hypot(ball.vx, ball.vy);
+  if (v < STOPPED) return { x: ball.x, y: ball.y, t: 0 };
+  let x = ball.x, y = ball.y;
+  const ux = ball.vx / v, uy = ball.vy / v;
+  const h = 1 / 30;
+  for (let t = 0; t < 5; t += h) {
+    v = Math.max(0, v - (ROLL + DRAG * v * v) * h);
+    x += ux * v * h; y += uy * v * h;
+    if (Math.hypot(x - p.x, y - p.y) / SPRINT <= t + 0.15) return { x, y, t };
+    if (v <= STOPPED) break;
+  }
+  return { x, y, t: 5 };
+}
+
+/* --- state ------------------------------------------------------------ */
+let seed, rand, players, ball, clock, passCount, phase, phaseT, log,
+    running, speed, retargetT, showRuns, looseFor, trail, lastDecision,
+    cycleCount, changes, stepGrain;
+
+function build(newSeed) {
+  seed = newSeed;
+  rand = mulberry32(seed);
+  location.hash = String(seed);
+
+  players = [];
+  const add = (spots, team) => spots.forEach(([x, y], i) => players.push({
+    id: team[0] + i, team, num: i + 1,
+    x, y, ax: x, ay: y,
+    vx: 0, vy: 0,
+    tx: x, ty: y,
+    gk: i === 0,
+    // How well he reads a team-mate's chance of getting to the ball first.
+    // Above zero he over-rates others and hangs back, below zero he goes anyway.
+    bias: (rand() - 0.5) * 0.26,
+  }));
+  add(BLUE_SPOTS, 'blue');
+  add(RED_SPOTS, 'red');
+
+  const starter = players.find((p) => p.id === 'b4');
+  ball = {
+    x: starter.x, y: starter.y, vx: 0, vy: 0,
+    holder: starter.id, from: null, to: null, lastFrom: null,
+    origin: null, aim: null,
+  };
+
+  clock = 0; passCount = 0; looseFor = 0; trail = []; lastDecision = null;
+  cycleCount = 0; changes = [];
+  phase = 'dwell'; phaseT = 0; retargetT = 0;
+  closeWhy();
+  log = [];
+  say('Kick-off. Blue #' + starter.num + ' has it.');
+}
+
+const byId = (id) => players.find((p) => p.id === id);
+const attackDir = (team) => (team === 'blue' ? 1 : -1);
+const cap = (s) => s[0].toUpperCase() + s.slice(1);
+const ballSpeed = () => Math.hypot(ball.vx, ball.vy);
+
+function say(text) {
+  log.unshift({ t: clock, text });
+  if (log.length > 3) log.pop();
+  renderLog();
+}
+
+const carrierNow = () => byId(ball.holder || ball.to);
+
+/* --- choosing a pass ---------------------------------------------------
+ * Unchanged from P0 on purpose, so movement and physics are the only
+ * new variables.
+ */
+function choosePass(carrier) {
+  const dir = attackDir(carrier.team);
+  const options = [];
+
+  for (const p of players) {
+    if (p.team !== carrier.team || p.id === carrier.id) continue;
+    const d = dist(carrier, p);
+    if (d > MAX_PASS || d < 3) continue;
+
+    const progress = (p.x - carrier.x) * dir;
+    const gain = progress * 0.16;
+    const cost = -d * 0.05;
+    const penalty = p.id === ball.lastFrom ? -0.9 : 0;
+    options.push({ p, num: p.num, id: p.id, d, progress, gain, cost, penalty, score: gain + cost + penalty });
+  }
+  if (!options.length) return null;
+
+  const top = Math.max(...options.map((o) => o.score));
+  let total = 0;
+  for (const o of options) { o.w = Math.exp((o.score - top) / 0.45); total += o.w; }
+  for (const o of options) { o.pct = o.w / total; }
+
+  let r = rand() * total, chosen = options[options.length - 1];
+  for (const o of options) { r -= o.w; if (r <= 0) { chosen = o; break; } }
+
+  // Keep the whole table, not just the answer. This is what the "why"
+  // panel reads, and later what an LLM would be handed to put into words.
+  lastDecision = {
+    at: clock,
+    carrier: carrier.id,
+    carrierNum: carrier.num,
+    chosen: chosen.id,
+    pressure: nearest(carrier, false).d,
+    options: options.slice().sort((a, b) => b.score - a.score),
+  };
+  return chosen;
+}
+
+/** Strike the ball at a point, with the pace to arrive properly. */
+function kick(from, aim) {
+  const d = Math.max(1, Math.hypot(aim.x - from.x, aim.y - from.y));
+  const v0 = solveKick(d, ARRIVE_V);
+  ball.vx = ((aim.x - from.x) / d) * v0;
+  ball.vy = ((aim.y - from.y) / d) * v0;
+  ball.x = from.x; ball.y = from.y;
+  ball.holder = null;
+  return v0;
+}
+
+/* --- movement -----------------------------------------------------------
+ * Nothing in here is random. Each player wants to stand on exactly one
+ * spot, worked out from four things he can see:
+ *   1. his anchor in the shape
+ *   2. how far the whole team has slid toward the ball
+ *   3. the nearest opponent, who he steps away from
+ *   4. the ball, which he wants to be a passable distance from
+ * He then eases toward that spot rather than snapping to it, and if he is
+ * already within DEADZONE of it he stands still.
+ */
+function teamShift(team) {
+  const t = TACTICS[team];
+  return {
+    dx: (ball.x - PITCH.L / 2) * t.line,
+    dy: (ball.y - PITCH.W / 2) * t.width,
+  };
+}
+
+function nearest(p, sameTeam) {
+  let best = null, bd = Infinity;
+  for (const q of players) {
+    if (q.id === p.id) continue;
+    if ((q.team === p.team) !== sameTeam) continue;
+    const d = dist(p, q);
+    if (d < bd) { bd = d; best = q; }
+  }
+  return { p: best, d: bd };
+}
+
+/** Where an attacking player off the ball wants to stand, and why. */
+function supportSpot(p, carrier, base, notes) {
+  let x = base.x, y = base.y;
+  notes.push('Holding his spot in the shape, slid to ' + base.x.toFixed(0) + 'm, ' +
+             base.y.toFixed(0) + 'm as the team shifted toward the ball.');
+
+  // step out of the nearest opponent's shadow
+  const o = nearest(p, false);
+  if (o.p && o.d < 7) {
+    const k = (7 - o.d) * 0.42;
+    x += ((p.x - o.p.x) / o.d) * k;
+    y += ((p.y - o.p.y) / o.d) * k;
+    notes.push(cap(o.p.team) + ' #' + o.p.num + ' is ' + o.d.toFixed(1) +
+               'm away, so he is stepping off him by ' + k.toFixed(1) + 'm.');
+  }
+
+  // do not stand on a team-mate
+  const m = nearest(p, true);
+  if (m.p && m.d < 6) {
+    const k = (6 - m.d) * 0.30;
+    x += ((p.x - m.p.x) / m.d) * k;
+    y += ((p.y - m.p.y) / m.d) * k;
+    notes.push('Too tight to his own #' + m.p.num + ' at ' + m.d.toFixed(1) +
+               'm, so he is opening the gap.');
+  }
+
+  // stay inside the support band the coach asked for
+  const t = TACTICS[p.team];
+  const dc = Math.max(dist(p, carrier), 0.001);
+  const want = clamp(dc, t.supportMin, t.supportMax);
+  if (want !== dc) {
+    const k = (want - dc) * 0.5;
+    x += ((p.x - carrier.x) / dc) * k;
+    y += ((p.y - carrier.y) / dc) * k;
+    notes.push(dc < t.supportMin
+      ? 'At ' + dc.toFixed(0) + 'm he is crowding the ball, so he is pushing out to ' + t.supportMin + 'm.'
+      : 'At ' + dc.toFixed(0) + 'm he is out of range, so he is coming back inside ' + t.supportMax + 'm.');
+  } else {
+    notes.push('He is ' + dc.toFixed(0) + 'm from the ball, which is a passable distance.');
+  }
+
+  return { x: clamp(x, 2, PITCH.L - 2), y: clamp(y, 2, PITCH.W - 2) };
+}
+
+/**
+ * Tier 2, decided by each player for himself. Nobody is assigned to press.
+ * A defender works out how long the ball would take him to reach, guesses
+ * the same for each team-mate from where he can see them standing, and
+ * counts how many he thinks beat him there. That count is his rank.
+ * His guess about others carries a personal bias, so two players can both
+ * think they are quickest and both go, exactly as they do on a real pitch.
+ */
+function pressRank(p) {
+  const mine = dist(p, ball) / RUN;
+  let ahead = 0;
+  for (const q of players) {
+    if (q.team !== p.team || q.id === p.id || q.gk) continue;
+    if ((dist(q, ball) / RUN) * (1 + p.bias) < mine) ahead++;
+  }
+  return ahead;
+}
+
+function retarget() {
+  const carrier = carrierNow();
+  const shifts = { blue: teamShift('blue'), red: teamShift('red') };
+  const loose = !ball.holder;
+  const defTeam = other(carrier.team);
+  cycleCount++;
+  changes = [];
+
+  for (const p of players) {
+    const wasRole = p.why ? p.why.role : null;
+    const shift = shifts[p.team];
+    const lead = p.gk ? GK_LEASH : 1;
+    const base = {
+      x: clamp(p.ax + shift.dx * lead, 2, PITCH.L - 2),
+      y: clamp(p.ay + shift.dy * lead, 2, PITCH.W - 2),
+    };
+
+    let want = base, pace = JOG, role = 'Holding the shape', notes = [];
+
+    if (p.id === ball.holder) {
+      want = { x: p.x, y: p.y }; pace = 0;
+      role = 'On the ball';
+      notes.push('He is standing still because dribbling does not exist yet.');
+      notes.push('The nearest opponent is ' + nearest(p, false).d.toFixed(1) + 'm away.');
+    } else if (loose && p.id === ball.to) {
+      const m = interceptPoint(p);
+      want = { x: clamp(m.x, 1, PITCH.L - 1), y: clamp(m.y, 1, PITCH.W - 1) };
+      pace = SPRINT;
+      role = 'Running onto the pass';
+      notes.push('Sprinting to ' + m.x.toFixed(0) + 'm, ' + m.y.toFixed(0) +
+                 'm, the first point on the ball’s roll he can reach in time.');
+      notes.push('He gets there in about ' + m.t.toFixed(1) + 's.');
+    } else if (p.team === defTeam && !p.gk && pressRank(p) < TACTICS[p.team].pressers) {
+      const rank = pressRank(p);
+      const stand = 1.6 + rank * 5;       // a second man covers behind the first
+      const d = Math.max(dist(p, ball), 0.001);
+      want = { x: ball.x - ((ball.x - p.x) / d) * stand, y: ball.y - ((ball.y - p.y) / d) * stand };
+      pace = RUN;
+      role = rank === 0 ? 'Pressing the ball' : 'Covering behind the press';
+      notes.push('He reckons ' + rank + ' of his team-mates would reach the ball before him, ' +
+                 'and the coach sends ' + TACTICS[p.team].pressers + ', so he goes.');
+      notes.push('He is ' + d.toFixed(1) + 'm away and reads others ' +
+                 (p.bias >= 0 ? (p.bias * 100).toFixed(0) + '% faster' : (-p.bias * 100).toFixed(0) + '% slower') +
+                 ' than they are.');
+      notes.push('He closes to ' + stand.toFixed(1) + 'm and stops, because tackling does not exist yet.');
+    } else if (p.team === carrier.team && !p.gk) {
+      role = 'Supporting the man on the ball';
+      want = supportSpot(p, carrier, base, notes);
+    } else if (p.gk) {
+      role = 'In goal';
+      notes.push('The keeper takes only a quarter of the team’s shift, so he stays home.');
+    } else {
+      notes.push('Not the nearest defender, so he holds the shifted shape at ' +
+                 base.x.toFixed(0) + 'm, ' + base.y.toFixed(0) + 'm.');
+    }
+
+    // ease the target rather than snapping it, so nobody twitches
+    p.tx += (want.x - p.tx) * SMOOTH;
+    p.ty += (want.y - p.ty) * SMOOTH;
+    p.pace = pace;
+    p.why = { role, notes, pace, target: { x: want.x, y: want.y } };
+    if (wasRole && wasRole !== role) {
+      changes.push({ team: p.team, num: p.num, from: wasRole, to: role });
+    }
+  }
+}
+
+function moveAll(dt) {
+  for (const p of players) {
+    const dx = p.tx - p.x, dy = p.ty - p.y;
+    const d = Math.hypot(dx, dy);
+    const dz = p.pace >= RUN ? 0.15 : DEADZONE;   // only jogging players loiter
+    let wx = 0, wy = 0;
+    if (d > dz && p.pace > 0) {
+      const want = Math.min(p.pace, (d - dz) * 1.6);
+      wx = (dx / d) * want; wy = (dy / d) * want;
+    }
+    const k = Math.min(1, dt * 3);                 // acceleration limit
+    p.vx += (wx - p.vx) * k;
+    p.vy += (wy - p.vy) * k;
+    p.x = clamp(p.x + p.vx * dt, 1, PITCH.L - 1);
+    p.y = clamp(p.y + p.vy * dt, 1, PITCH.W - 1);
+  }
+}
+
+/* --- ball --------------------------------------------------------------- */
+function moveBall(dt) {
+  if (ball.holder) {
+    const p = byId(ball.holder);
+    ball.x = p.x; ball.y = p.y; ball.vx = ball.vy = 0;
+    return;
+  }
+
+  let v = ballSpeed();
+  if (v > 0) {
+    const decel = (ROLL + DRAG * v * v) * dt;
+    const nv = Math.max(0, v - decel);
+    ball.vx *= v ? nv / v : 0;
+    ball.vy *= v ? nv / v : 0;
+    if (nv < STOPPED) { ball.vx = ball.vy = 0; }
+  }
+  ball.x += ball.vx * dt;
+  ball.y += ball.vy * dt;
+
+  // touchlines: rebound rather than invent a throw-in
+  if (ball.x < 0.4) { ball.x = 0.4; ball.vx = -ball.vx * BOUNCE; }
+  if (ball.x > PITCH.L - 0.4) { ball.x = PITCH.L - 0.4; ball.vx = -ball.vx * BOUNCE; }
+  if (ball.y < 0.4) { ball.y = 0.4; ball.vy = -ball.vy * BOUNCE; }
+  if (ball.y > PITCH.W - 0.4) { ball.y = PITCH.W - 0.4; ball.vy = -ball.vy * BOUNCE; }
+
+  trail.push({ x: ball.x, y: ball.y });
+  if (trail.length > 14) trail.shift();
+}
+
+/* --- simulation --------------------------------------------------------- */
+function step(dt) {
+  clock += dt;
+  phaseT += dt;
+
+  retargetT += dt;
+  if (retargetT >= RETARGET) { retarget(); retargetT = 0; }
+
+  moveAll(dt);
+  moveBall(dt);
+
+  if (phase === 'dwell') {
+    if (phaseT < DWELL) return;
+    const carrier = byId(ball.holder);
+    const pick = choosePass(carrier);
+    if (!pick) { phaseT = 0; return; }
+
+    // Aim into his run: work out the flight time, then lead him by it.
+    const r = pick.p;
+    let aim = { x: r.x, y: r.y };
+    for (let i = 0; i < 2; i++) {
+      const d = Math.max(1, Math.hypot(aim.x - carrier.x, aim.y - carrier.y));
+      const t = SET_TIME + rollTo(solveKick(d, ARRIVE_V), d).t;
+      aim = {
+        x: clamp(r.x + r.vx * t, 1.5, PITCH.L - 1.5),
+        y: clamp(r.y + r.vy * t, 1.5, PITCH.W - 1.5),
+      };
+    }
+    ball.from = carrier.id;
+    ball.to = r.id;
+    ball.aim = aim;
+    phase = 'set'; phaseT = 0;
+    return;
+  }
+
+  if (phase === 'set') {
+    if (phaseT < SET_TIME) return;
+    const carrier = byId(ball.from);
+    ball.origin = { x: carrier.x, y: carrier.y };
+    const v0 = kick(carrier, ball.aim);
+    ball.kickV = v0;
+    trail = [];
+    phase = 'live'; phaseT = 0; looseFor = 0;
+    return;
+  }
+
+  if (phase === 'live') {
+    looseFor += dt;
+    const target = byId(ball.to);
+
+    // Only the intended receiver can take it. Interceptions are P3.
+    if (dist(target, ball) <= CONTROL_R) {
+      const a = byId(ball.from);
+      const travelled = Math.hypot(ball.x - ball.origin.x, ball.y - ball.origin.y);
+      ball.holder = target.id;
+      ball.lastFrom = a.id;
+      passCount++;
+      say(
+        cap(target.team) + ' #' + a.num + ' → #' + target.num +
+        ', ' + travelled.toFixed(0) + 'm at ' + ball.kickV.toFixed(0) + ' m/s' +
+        (looseFor > 2.2 ? ' (had to chase it)' : '')
+      );
+      ball.from = ball.to = null; ball.origin = ball.aim = null;
+      phase = 'dwell'; phaseT = 0;
+      return;
+    }
+
+    // Safety valve: if a pass dies and nobody has collected it, give it up.
+    if (looseFor > 6) {
+      const near = players.filter((p) => !p.gk).sort((a, b) => dist(a, ball) - dist(b, ball))[0];
+      ball.holder = near.id; ball.vx = ball.vy = 0;
+      ball.from = ball.to = null; ball.origin = ball.aim = null;
+      ball.lastFrom = null;
+      say(cap(near.team) + ' #' + near.num + ' collects a loose ball.');
+      phase = 'dwell'; phaseT = 0;
+    }
+  }
+}
+
+/* --- rendering ---------------------------------------------------------- */
+const canvas = document.getElementById('c');
+const ctx = canvas.getContext('2d');
+let view = { s: 1, ox: 0, oy: 0 };
+
+function resize() {
+  const stage = document.getElementById('stage');
+  const w = stage.clientWidth, h = stage.clientHeight;
+  const dpr = Math.min(window.devicePixelRatio || 1, 2);
+  canvas.width = Math.round(w * dpr);
+  canvas.height = Math.round(h * dpr);
+  ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+  const pad = 10;
+  const s = Math.min((w - pad * 2) / PITCH.W, (h - pad * 2) / PITCH.L);
+  view = { s, ox: (w - PITCH.W * s) / 2, oy: (h - PITCH.L * s) / 2 };
+}
+
+const sx = (p) => view.ox + p.y * view.s;
+const sy = (p) => view.oy + (PITCH.L - p.x) * view.s;
+
+function roundRect(c, x, y, w, h, r) {
+  c.beginPath();
+  c.moveTo(x + r, y);
+  c.arcTo(x + w, y, x + w, y + h, r);
+  c.arcTo(x + w, y + h, x, y + h, r);
+  c.arcTo(x, y + h, x, y, r);
+  c.arcTo(x, y, x + w, y, r);
+  c.closePath();
+}
+
+function drawPitch() {
+  const { s, ox, oy } = view;
+  const W = PITCH.W * s, L = PITCH.L * s;
+  ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+  ctx.save();
+  roundRect(ctx, ox, oy, W, L, 6);
+  ctx.clip();
+  for (let i = 0; i < 10; i++) {
+    ctx.fillStyle = i % 2 ? '#1e7540' : '#1b6b3a';
+    ctx.fillRect(ox, oy + (L / 10) * i, W, L / 10 + 1);
+  }
+  ctx.restore();
+
+  ctx.strokeStyle = 'rgba(255,255,255,0.55)';
+  ctx.lineWidth = 1.6;
+  roundRect(ctx, ox, oy, W, L, 6); ctx.stroke();
+  ctx.beginPath();
+  ctx.moveTo(ox, oy + L / 2); ctx.lineTo(ox + W, oy + L / 2);
+  ctx.stroke();
+  ctx.beginPath();
+  ctx.arc(ox + W / 2, oy + L / 2, 7 * s, 0, Math.PI * 2);
+  ctx.stroke();
+
+  const boxW = 24 * s, boxD = 13 * s;
+  ctx.strokeRect(ox + (W - boxW) / 2, oy, boxW, boxD);
+  ctx.strokeRect(ox + (W - boxW) / 2, oy + L - boxD, boxW, boxD);
+
+  const goalW = 6 * s;
+  ctx.lineWidth = 3;
+  ctx.beginPath();
+  ctx.moveTo(ox + (W - goalW) / 2, oy); ctx.lineTo(ox + (W + goalW) / 2, oy);
+  ctx.moveTo(ox + (W - goalW) / 2, oy + L); ctx.lineTo(ox + (W + goalW) / 2, oy + L);
+  ctx.stroke();
+}
+
+function drawRuns() {
+  if (!showRuns) return;
+  ctx.save();
+  ctx.lineWidth = 1;
+  ctx.setLineDash([2, 3]);
+  for (const p of players) {
+    if (Math.hypot(p.tx - p.x, p.ty - p.y) < 0.6) continue;
+    ctx.strokeStyle = p.team === 'blue' ? 'rgba(75,156,245,0.55)' : 'rgba(242,86,76,0.55)';
+    ctx.beginPath();
+    ctx.moveTo(sx(p), sy(p));
+    ctx.lineTo(sx({ x: p.tx, y: p.ty }), sy({ x: p.tx, y: p.ty }));
+    ctx.stroke();
+  }
+  ctx.restore();
+}
+
+function drawAim() {
+  if (!ball.aim || (phase !== 'set' && phase !== 'live')) return;
+  const a = byId(ball.from);
+  ctx.save();
+  ctx.strokeStyle = a.team === 'blue' ? 'rgba(75,156,245,0.6)' : 'rgba(242,86,76,0.6)';
+  ctx.lineWidth = 1.5;
+  ctx.setLineDash([4, 5]);
+  ctx.beginPath();
+  ctx.moveTo(sx(ball), sy(ball));
+  ctx.lineTo(sx(ball.aim), sy(ball.aim));
+  ctx.stroke();
+  ctx.setLineDash([]);
+  ctx.beginPath();
+  ctx.arc(sx(ball.aim), sy(ball.aim), 3, 0, Math.PI * 2);
+  ctx.stroke();
+  ctx.restore();
+}
+
+function drawPlayers() {
+  const r = Math.max(9, 1.35 * view.s);
+  for (const p of players) {
+    const x = sx(p), y = sy(p);
+    const hasBall = ball.holder === p.id;
+    const sp = Math.hypot(p.vx, p.vy);
+
+    if (sp > 0.4) {
+      const t = { x: p.x - p.vx * 0.22, y: p.y - p.vy * 0.22 };
+      ctx.strokeStyle = p.team === 'blue' ? 'rgba(75,156,245,0.45)' : 'rgba(242,86,76,0.45)';
+      ctx.lineWidth = r * 0.8;
+      ctx.lineCap = 'round';
+      ctx.beginPath();
+      ctx.moveTo(sx(t), sy(t));
+      ctx.lineTo(x, y);
+      ctx.stroke();
+    }
+
+    if (hasBall) {
+      ctx.beginPath();
+      ctx.arc(x, y, r + 5, 0, Math.PI * 2);
+      ctx.fillStyle = 'rgba(255,255,255,0.18)';
+      ctx.fill();
+    }
+
+    if (p === whoWhy) {
+      ctx.beginPath();
+      ctx.arc(x, y, r + 8, 0, Math.PI * 2);
+      ctx.strokeStyle = '#ffd166';
+      ctx.lineWidth = 2.5;
+      ctx.stroke();
+    }
+
+    ctx.beginPath();
+    ctx.arc(x, y, r, 0, Math.PI * 2);
+    ctx.fillStyle = p.team === 'blue' ? '#4b9cf5' : '#f2564c';
+    ctx.fill();
+    ctx.lineWidth = 2;
+    ctx.strokeStyle = hasBall ? '#ffffff' : 'rgba(0,0,0,0.35)';
+    ctx.stroke();
+
+    ctx.fillStyle = '#ffffff';
+    ctx.font = '600 ' + Math.round(r * 1.05) + 'px ui-sans-serif, system-ui, sans-serif';
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.fillText(String(p.num), x, y + 0.5);
+  }
+}
+
+function drawBall() {
+  // a short streak behind a moving ball, so pace is visible
+  if (trail.length > 1 && ballSpeed() > 1) {
+    ctx.save();
+    ctx.lineCap = 'round';
+    for (let i = 1; i < trail.length; i++) {
+      ctx.strokeStyle = 'rgba(255,255,255,' + (0.05 + 0.3 * (i / trail.length)) + ')';
+      ctx.lineWidth = Math.max(1.5, 0.5 * view.s) * (i / trail.length);
+      ctx.beginPath();
+      ctx.moveTo(sx(trail[i - 1]), sy(trail[i - 1]));
+      ctx.lineTo(sx(trail[i]), sy(trail[i]));
+      ctx.stroke();
+    }
+    ctx.restore();
+  }
+
+  const r = Math.max(4, 0.55 * view.s);
+  ctx.beginPath();
+  ctx.arc(sx(ball), sy(ball), r, 0, Math.PI * 2);
+  ctx.fillStyle = '#ffffff';
+  ctx.fill();
+  ctx.lineWidth = 1;
+  ctx.strokeStyle = 'rgba(0,0,0,0.5)';
+  ctx.stroke();
+}
+
+function draw() {
+  drawPitch();
+  drawRuns();
+  drawAim();
+  drawPlayers();
+  drawBall();
+}
+
+/* --- hud ---------------------------------------------------------------- */
+function renderHud() {
+  const m = Math.floor(clock / 60), s = Math.floor(clock % 60);
+  document.getElementById('clock').textContent = m + ':' + String(s).padStart(2, '0');
+  const c = carrierNow();
+  document.getElementById('possDot').style.background = c.team === 'blue' ? '#4b9cf5' : '#f2564c';
+  document.getElementById('possName').textContent = cap(c.team);
+  document.getElementById('passes').textContent = passCount + (passCount === 1 ? ' pass' : ' passes');
+  document.getElementById('bspeed').textContent = 'ball ' + ballSpeed().toFixed(1) + ' m/s';
+}
+
+function renderLog() {
+  document.getElementById('log').innerHTML = log
+    .map((l) => '<div>' + fmt(l.t) + '  ' + l.text + '</div>')
+    .join('');
+}
+const fmt = (t) => Math.floor(t / 60) + ':' + String(Math.floor(t % 60)).padStart(2, '0');
+
+/* --- loop --------------------------------------------------------------- */
+const TICK = 1 / 120;   // finer than the frame rate, so the physics stays stable
+let acc = 0, last = 0, lastBrain = 0;
+
+function frame(now) {
+  if (!last) last = now;
+  let dt = (now - last) / 1000;
+  last = now;
+  if (dt > 0.25) dt = 0.25;
+
+  if (running) {
+    acc += dt * speed;
+    let guard = 0;
+    while (acc >= TICK && guard++ < 600) { step(TICK); acc -= TICK; }
+  }
+  draw();
+  renderHud();
+  if (document.getElementById('brain').classList.contains('open') && now - lastBrain > 160) {
+    renderBrain();
+    lastBrain = now;
+  }
+  requestAnimationFrame(frame);
+}
+
+/* --- controls ----------------------------------------------------------- */
+const playBtn = document.getElementById('playBtn');
+const speedBtn = document.getElementById('speedBtn');
+const brainBtn = document.getElementById('brainBtn');
+const SPEEDS = [1, 2, 4];
+
+playBtn.onclick = () => {
+  running = !running;
+  playBtn.textContent = running ? 'Pause' : 'Play';
+  playBtn.classList.toggle('on', !running);
+};
+speedBtn.onclick = () => {
+  speed = SPEEDS[(SPEEDS.indexOf(speed) + 1) % SPEEDS.length];
+  speedBtn.innerHTML = speed + '&times;';
+};
+brainBtn.onclick = () => {
+  const open = !document.getElementById('brain').classList.contains('open');
+  document.getElementById('brain').classList.toggle('open', open);
+  brainBtn.classList.toggle('on', open);
+  if (open) { closeWhy(); renderBrain(); }
+};
+document.getElementById('brainClose').onclick = () => {
+  document.getElementById('brain').classList.remove('open');
+  brainBtn.classList.remove('on');
+};
+function switchBall() {
+  const c = carrierNow();
+  const taker = players
+    .filter((p) => p.team !== c.team && !p.gk)
+    .sort((a, b) => dist(a, c) - dist(b, c))[0];
+  ball.holder = taker.id; ball.vx = ball.vy = 0;
+  ball.from = ball.to = null; ball.origin = ball.aim = null;
+  ball.lastFrom = null;
+  phase = 'dwell'; phaseT = 0;
+  say(cap(taker.team) + ' #' + taker.num + ' picks it up.');
+}
+
+/* --- stepping ------------------------------------------------------------
+ * Three granularities, because there are three loops worth watching:
+ *   tick   one physics step, 1/120s, nothing decides
+ *   cycle  one decision pass, 0.2s, every role and target is recomputed
+ *   event  run until the ball changes hands
+ */
+const GRAINS = ['cycle', 'tick', 'event'];
+const stepBtn = document.getElementById('stepBtn');
+
+function stepOnce() {
+  if (running) { running = false; playBtn.textContent = 'Play'; playBtn.classList.add('on'); }
+  if (stepGrain === 'tick') { step(TICK); return; }
+  const c0 = cycleCount, p0 = passCount;
+  let guard = 0;
+  do { step(TICK); } while (
+    guard++ < 8000 &&
+    (stepGrain === 'cycle' ? cycleCount === c0 : passCount === p0)
+  );
+}
+
+stepBtn.onclick = stepOnce;
+document.getElementById('resetBtn').onclick = () => build((Math.random() * 1e9) >>> 0);
+
+window.addEventListener('resize', () => { resize(); draw(); });
+
+/* --- why did you do that? -----------------------------------------------
+ * Tap a player. Everything shown below is read straight out of the numbers
+ * the engine actually used, so the explanation cannot drift from the
+ * decision. An LLM would be handed this same record to put into English,
+ * and would never be the thing that chose.
+ */
+const whyEl = document.getElementById('why');
+let whoWhy = null;
+
+function closeWhy() {
+  if (whyEl) whyEl.classList.remove('open');
+  whoWhy = null;
+}
+
+function openWhy(p) {
+  whoWhy = p;
+  running = false;
+  playBtn.textContent = 'Play';
+  playBtn.classList.add('on');
+  document.getElementById('whyBody').innerHTML = explain(p);
+  whyEl.classList.add('open');
+}
+
+function explain(p) {
+  const w = p.why || { role: 'Holding the shape', notes: [] };
+  let h = '<h3>' + cap(p.team) + ' #' + p.num + '</h3>';
+  h += '<div class="sub">' + w.role + ' · ' +
+       (w.pace ? Math.hypot(p.vx, p.vy).toFixed(1) + ' m/s' : 'stationary') + '</div>';
+
+  if (lastDecision && lastDecision.carrier === p.id) {
+    h += '<div class="cap">Every ball he could have played, at ' + fmt(lastDecision.at) + '</div>';
+    h += '<table><tr><th>To</th><th>Forward</th><th>Range</th><th>Score</th><th>Odds</th></tr>';
+    for (const o of lastDecision.options) {
+      h += '<tr class="' + (o.id === lastDecision.chosen ? 'pick' : '') + '">' +
+           '<td>#' + o.num + (o.penalty ? ' ↩' : '') + '</td>' +
+           '<td>' + (o.progress >= 0 ? '+' : '') + o.progress.toFixed(0) + 'm</td>' +
+           '<td>' + o.d.toFixed(0) + 'm</td>' +
+           '<td>' + o.score.toFixed(2) + '</td>' +
+           '<td>' + (o.pct * 100).toFixed(0) + '%</td></tr>';
+    }
+    h += '</table>';
+    const pick = lastDecision.options.find((o) => o.id === lastDecision.chosen);
+    h += '<ul><li>Score is ' + 'forward metres × 0.16, minus range × 0.05' +
+         (lastDecision.options.some((o) => o.penalty) ? ', minus 0.90 for playing it straight back (↩)' : '') +
+         '.</li>';
+    h += '<li>He played #' + pick.num + ': ' + (pick.progress >= 0 ? 'gains ' : 'loses ') +
+         Math.abs(pick.progress).toFixed(0) + 'm for a ' + pick.d.toFixed(0) + 'm ball, ' +
+         'which came out top at ' + (pick.pct * 100).toFixed(0) + '%.</li>';
+    h += '<li>The closest opponent to him was ' + lastDecision.pressure.toFixed(1) +
+         'm away, which the engine does not weigh yet.</li></ul>';
+  }
+
+  if (w.notes.length) {
+    h += '<div class="cap">Why he is standing where he is</div>';
+    h += '<ul>' + w.notes.map((n) => '<li>' + n + '</li>').join('') + '</ul>';
+  }
+  return h;
+}
+
+document.getElementById('whyClose').onclick = closeWhy;
+
+/* --- the pyramid, live ---------------------------------------------------
+ * Every tier of the decision stack, read straight off the running engine.
+ * Tapping any player row opens the full "why" for him.
+ */
+function renderBrain() {
+  const carrier = carrierNow();
+  const box = document.getElementById('brain');
+  const scroll = box.scrollTop;
+  let h = '';
+
+  h += '<div class="tier">Tier 1 &middot; Coach</div>';
+  for (const team of ['blue', 'red']) {
+    const t = TACTICS[team];
+    const on = carrier.team === team;
+    h += '<div class="row head"><span><i class="dot ' + team + '"></i>' + cap(team) + '</span>' +
+         '<span class="v">' + (on ? 'in possession' : 'out of possession') + '</span></div>';
+    h += '<div class="row"><span>shape</span><span class="v">line ' + t.line.toFixed(2) +
+         ' &middot; width ' + t.width.toFixed(2) + '</span></div>';
+    h += '<div class="row"><span>' + (on ? 'support band' : 'sent at the ball') + '</span>' +
+         '<span class="v">' + (on ? t.supportMin + '–' + t.supportMax + 'm' : t.pressers) +
+         '</span></div>';
+  }
+
+  h += '<div class="tier">Tier 2 &middot; Roles, this instant</div>';
+  for (const team of [carrier.team, other(carrier.team)]) {
+    for (const p of players.filter((q) => q.team === team)) {
+      const w = p.why || {};
+      h += '<div class="row' + (p === whoWhy ? ' sel' : '') + '" data-id="' + p.id + '">' +
+           '<span><i class="dot ' + p.team + '"></i>#' + p.num + '</span>' +
+           '<span class="v">' + (w.role || '—') + '</span></div>';
+    }
+  }
+
+  h += '<div class="tier">Tier 3 &middot; Motor targets</div>';
+  for (const p of players) {
+    const w = p.why || {};
+    const tg = w.target || { x: p.tx, y: p.ty };
+    h += '<div class="row" data-id="' + p.id + '">' +
+         '<span><i class="dot ' + p.team + '"></i>#' + p.num + '</span>' +
+         '<span class="v">' + tg.x.toFixed(0) + ', ' + tg.y.toFixed(0) + 'm &middot; ' +
+         Math.hypot(p.vx, p.vy).toFixed(1) + ' of ' + (w.pace || 0).toFixed(1) + ' m/s</span></div>';
+  }
+
+  h += '<div class="tier">Ball</div>';
+  h += '<div class="row head"><span>' + phase + '</span>' +
+       '<span class="v">' + ballSpeed().toFixed(1) + ' m/s</span></div>';
+  if (lastDecision) {
+    const pick = lastDecision.options.find((o) => o.id === lastDecision.chosen);
+    h += '<div class="row"><span>last choice</span><span class="v">#' + lastDecision.carrierNum +
+         ' → #' + pick.num + ', ' + (pick.pct * 100).toFixed(0) + '% of the weight</span></div>';
+  }
+
+  h += '<div class="tier">What changed on cycle ' + cycleCount + '</div>';
+  if (!changes.length) {
+    h += '<div class="row head"><span>no role changed</span>' +
+         '<span class="v">targets still moved</span></div>';
+  } else {
+    for (const c of changes) {
+      h += '<div class="row head"><span><i class="dot ' + c.team + '"></i>#' + c.num + '</span>' +
+           '<span class="v">' + c.from + ' → ' + c.to + '</span></div>';
+    }
+  }
+
+  h += '<div class="tier">Controls</div>';
+  h += '<div class="row" id="grainRow"><span>Step advances one</span>' +
+       '<span class="v">' + stepGrain + '</span></div>';
+  h += '<div class="row" id="runsRow"><span>Draw intended runs on the pitch</span>' +
+       '<span class="v">' + (showRuns ? 'on' : 'off') + '</span></div>';
+  h += '<div class="row" id="switchRow"><span>Hand the ball to the other team</span>' +
+       '<span class="v">do it</span></div>';
+
+  const el = document.getElementById('brainBody');
+  el.innerHTML = h;
+  el.querySelectorAll('.row[data-id]').forEach((r) => {
+    r.onclick = () => openWhy(byId(r.dataset.id));
+  });
+  const wire = (id, fn) => { const n = document.getElementById(id); if (n) n.onclick = fn; };
+  wire('runsRow', () => { showRuns = !showRuns; renderBrain(); });
+  wire('switchRow', () => { switchBall(); renderBrain(); });
+  wire('grainRow', () => {
+    stepGrain = GRAINS[(GRAINS.indexOf(stepGrain) + 1) % GRAINS.length];
+    renderBrain();
+  });
+  box.scrollTop = scroll;
+}
+
+canvas.addEventListener('click', (e) => {
+  const r = canvas.getBoundingClientRect();
+  const my = (e.clientX - r.left - view.ox) / view.s;          // pitch y
+  const mx = PITCH.L - (e.clientY - r.top - view.oy) / view.s; // pitch x
+  let best = null, bd = Infinity;
+  for (const p of players) {
+    const d = Math.hypot(p.x - mx, p.y - my);
+    if (d < bd) { bd = d; best = p; }
+  }
+  if (bd > 4.5) { closeWhy(); return; }
+  openWhy(best);
+});
+
+/* --- go ----------------------------------------------------------------- */
+running = true; speed = 1; showRuns = false; stepGrain = 'cycle';
+build(seedFromUrl());
+resize();
+retarget();
+requestAnimationFrame(frame);
+</script>
+</body>
+</html>
