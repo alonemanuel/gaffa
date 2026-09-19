@@ -13,6 +13,14 @@
  */
 
 import { useCallback, useEffect, useRef, useState } from 'react';
+import {
+  PauseIcon,
+  PlayIcon,
+  ResetIcon,
+  RunsIcon,
+  SpeedIcon,
+  StepIcon,
+} from '@/components/Icons';
 import Inspector from '@/components/Inspector';
 import PitchView from '@/components/Pitch';
 import {
@@ -165,24 +173,6 @@ export default function Page() {
 
   return (
     <main className="wrap">
-      <header className="hud">
-        <span className="clock">{mmss}</span>
-        <span className="meta">
-          {hud.passes} {hud.passes === 1 ? 'pass' : 'passes'} &middot; beat {hud.beat}
-        </span>
-        <span className={`badge ${source}`}>
-          {thinking ? 'deciding' : source === 'none' ? 'idle' : source}
-          {latency > 0 && source === 'jev' && ` ${latency}ms`}
-        </span>
-      </header>
-
-      {source === 'mock' && (
-        <p className="warn">
-          Running on the stand-in model. Connect the AI Gateway to let Jev decide.
-          {err && <> Last error: {err}</>}
-        </p>
-      )}
-
       <div className="stage">
         <PitchView
           stateRef={stateRef}
@@ -192,24 +182,64 @@ export default function Page() {
         />
       </div>
 
-      <div className="log">
-        {log.map((l, i) => (
-          <div key={`${l.at}-${i}`}>
-            {Math.floor(l.at / 60)}:{String(Math.floor(l.at % 60)).padStart(2, '0')} {l.text}
-          </div>
-        ))}
-      </div>
+      <section className="info">
+        <header className="hud">
+          <span className="clock">{mmss}</span>
+          <span className="meta">
+            {hud.passes} {hud.passes === 1 ? 'pass' : 'passes'} &middot; beat {hud.beat}
+          </span>
+          <span className={`badge ${source}`}>
+            {thinking ? 'deciding' : source === 'none' ? 'idle' : source}
+            {latency > 0 && source === 'jev' && ` ${latency}ms`}
+          </span>
+        </header>
+
+        <div className="log">
+          {log.slice(0, 2).map((l, i) => (
+            <div key={`${l.at}-${i}`}>
+              <span className="t">
+                {Math.floor(l.at / 60)}:{String(Math.floor(l.at % 60)).padStart(2, '0')}
+              </span>{' '}
+              {l.text}
+            </div>
+          ))}
+        </div>
+
+        {source === 'mock' && (
+          <p className="warn">
+            Stand-in model{err ? `: ${err}` : '. Connect the AI Gateway to let Jev decide.'}
+          </p>
+        )}
+      </section>
 
       <nav className="bar">
-        <button onClick={() => setRunning((r) => !r)} className={running ? '' : 'on'}>
-          {running ? 'Pause' : 'Play'}
+        <button
+          onClick={() => setRunning((r) => !r)}
+          className={running ? '' : 'on'}
+          aria-label={running ? 'Pause' : 'Play'}
+          title={running ? 'Pause' : 'Play'}
+        >
+          {running ? <PauseIcon /> : <PlayIcon />}
         </button>
-        <button onClick={() => setSpeed((s) => (s === 1 ? 2 : s === 2 ? 0.5 : 1))}>
-          {speed}&times;
+        <button
+          onClick={() => setSpeed((s) => (s === 1 ? 2 : s === 2 ? 0.5 : 1))}
+          aria-label={`Speed, currently ${speed} times`}
+          title="Speed"
+        >
+          <SpeedIcon />
+          <span className="val">{speed}&times;</span>
         </button>
-        <button onClick={stepBeat}>Step</button>
-        <button onClick={() => setShowTargets((v) => !v)} className={showTargets ? 'on' : ''}>
-          Runs
+        <button onClick={stepBeat} aria-label="Step one decision round" title="Step one round">
+          <StepIcon />
+        </button>
+        <button
+          onClick={() => setShowTargets((v) => !v)}
+          className={showTargets ? 'on' : ''}
+          aria-pressed={showTargets}
+          aria-label="Show where everyone is running to"
+          title="Show runs"
+        >
+          <RunsIcon />
         </button>
         <button
           onClick={() => {
@@ -219,8 +249,10 @@ export default function Page() {
             setSelectedId(null);
             setSelected(null);
           }}
+          aria-label="Reset the match"
+          title="Reset"
         >
-          Reset
+          <ResetIcon />
         </button>
       </nav>
 

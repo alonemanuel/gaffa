@@ -13,12 +13,15 @@ interface Props {
   onSelect: (p: Player | null) => void;
 }
 
-const BLUE = '#4b9cf5';
-const RED = '#f2564c';
+const BLUE = '#0000ff';
+const RED = '#ff0000';
+const GRASS = '#0a6b3a';
+const SURROUND = '#064024';
+const LINES = 'rgba(255,255,255,0.78)';
 
 export default function Pitch({ stateRef, selectedId, showTargets, onSelect }: Props) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
-  const viewRef = useRef({ s: 1, ox: 0, oy: 0 });
+  const viewRef = useRef({ s: 1, ox: 0, oy: 0, w: 0, h: 0 });
 
   useEffect(() => {
     const canvas = canvasRef.current;
@@ -37,48 +40,38 @@ export default function Pitch({ stateRef, selectedId, showTargets, onSelect }: P
       canvas.width = Math.round(w * dpr);
       canvas.height = Math.round(h * dpr);
       ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
-      const pad = 8;
-      const s = Math.min((w - pad * 2) / PITCH.W, (h - pad * 2) / PITCH.L);
-      viewRef.current = { s, ox: (w - PITCH.W * s) / 2, oy: (h - PITCH.L * s) / 2 };
+      // Mobile first: fill the width exactly and sit flush against the top.
+      // The stage is sized to the pitch in CSS, so on a phone there is nothing
+      // left over. On a screen too short for the full length, the height binds
+      // instead and the pitch centres horizontally.
+      const s = Math.min(w / PITCH.W, h / PITCH.L);
+      viewRef.current = { s, ox: (w - PITCH.W * s) / 2, oy: 0, w, h };
     };
 
     const sx = (p: { x: number; y: number }) => viewRef.current.ox + p.y * viewRef.current.s;
     const sy = (p: { x: number; y: number }) =>
       viewRef.current.oy + (PITCH.L - p.x) * viewRef.current.s;
 
-    const roundRect = (x: number, y: number, w: number, h: number, r: number) => {
-      ctx.beginPath();
-      ctx.moveTo(x + r, y);
-      ctx.arcTo(x + w, y, x + w, y + h, r);
-      ctx.arcTo(x + w, y + h, x, y + h, r);
-      ctx.arcTo(x, y + h, x, y, r);
-      ctx.arcTo(x, y, x + w, y, r);
-      ctx.closePath();
-    };
-
     const draw = () => {
       raf = requestAnimationFrame(draw);
       const s = stateRef.current;
       if (!s) return;
-      const { s: sc, ox, oy } = viewRef.current;
+      const { s: sc, ox, oy, w: vw, h: vh } = viewRef.current;
       const W = PITCH.W * sc;
       const L = PITCH.L * sc;
 
-      ctx.clearRect(0, 0, canvas.width, canvas.height);
+      // Flat grass. The surround is a shade darker only so you can see where
+      // the pitch ends on a screen that does not fill.
+      ctx.fillStyle = SURROUND;
+      ctx.fillRect(0, 0, vw, vh);
+      ctx.fillStyle = GRASS;
+      ctx.fillRect(ox, oy, W, L);
 
-      ctx.save();
-      roundRect(ox, oy, W, L, 6);
-      ctx.clip();
-      for (let i = 0; i < 10; i++) {
-        ctx.fillStyle = i % 2 ? '#1e7540' : '#1b6b3a';
-        ctx.fillRect(ox, oy + (L / 10) * i, W, L / 10 + 1);
-      }
-      ctx.restore();
-
-      ctx.strokeStyle = 'rgba(255,255,255,0.5)';
-      ctx.lineWidth = 1.5;
-      roundRect(ox, oy, W, L, 6);
-      ctx.stroke();
+      // Markings are painted about 25cm wide in real life. Scaling with the
+      // pitch keeps them the same weight whatever the screen.
+      ctx.strokeStyle = LINES;
+      ctx.lineWidth = Math.max(2.5, 0.3 * sc);
+      ctx.strokeRect(ox, oy, W, L);
       ctx.beginPath();
       ctx.moveTo(ox, oy + L / 2);
       ctx.lineTo(ox + W, oy + L / 2);
@@ -86,10 +79,23 @@ export default function Pitch({ stateRef, selectedId, showTargets, onSelect }: P
       ctx.beginPath();
       ctx.arc(ox + W / 2, oy + L / 2, 7 * sc, 0, Math.PI * 2);
       ctx.stroke();
-      const boxW = 24 * sc;
-      const boxD = 13 * sc;
+
+      // 7v7 penalty areas: 20m across and 9m deep, rather than the full-size
+      // box, which swallows a third of a pitch this short.
+      const boxW = 20 * sc;
+      const boxD = 9 * sc;
       ctx.strokeRect(ox + (W - boxW) / 2, oy, boxW, boxD);
       ctx.strokeRect(ox + (W - boxW) / 2, oy + L - boxD, boxW, boxD);
+
+      // Goals, drawn heavier so each end reads at a glance.
+      const goalW = 6 * sc;
+      ctx.lineWidth = Math.max(4, 0.5 * sc);
+      ctx.beginPath();
+      ctx.moveTo(ox + (W - goalW) / 2, oy);
+      ctx.lineTo(ox + (W + goalW) / 2, oy);
+      ctx.moveTo(ox + (W - goalW) / 2, oy + L);
+      ctx.lineTo(ox + (W + goalW) / 2, oy + L);
+      ctx.stroke();
 
       // where everyone is running to
       if (showTargets) {
@@ -98,7 +104,7 @@ export default function Pitch({ stateRef, selectedId, showTargets, onSelect }: P
         ctx.lineWidth = 1;
         for (const p of s.players) {
           if (Math.hypot(p.targetX - p.x, p.targetY - p.y) < 0.8) continue;
-          ctx.strokeStyle = p.team === 'blue' ? 'rgba(75,156,245,.55)' : 'rgba(242,86,76,.55)';
+          ctx.strokeStyle = p.team === 'blue' ? 'rgba(0,0,255,.6)' : 'rgba(255,0,0,.6)';
           ctx.beginPath();
           ctx.moveTo(sx(p), sy(p));
           ctx.lineTo(sx({ x: p.targetX, y: p.targetY }), sy({ x: p.targetX, y: p.targetY }));
@@ -114,7 +120,7 @@ export default function Pitch({ stateRef, selectedId, showTargets, onSelect }: P
           ctx.save();
           ctx.setLineDash([5, 5]);
           ctx.lineWidth = 2;
-          ctx.strokeStyle = a.team === 'blue' ? 'rgba(75,156,245,.75)' : 'rgba(242,86,76,.75)';
+          ctx.strokeStyle = a.team === 'blue' ? 'rgba(0,0,255,.8)' : 'rgba(255,0,0,.8)';
           ctx.beginPath();
           ctx.moveTo(sx(s.ball), sy(s.ball));
           ctx.lineTo(sx(s.ball.aim), sy(s.ball.aim));
@@ -129,7 +135,7 @@ export default function Pitch({ stateRef, selectedId, showTargets, onSelect }: P
         const y = sy(p);
         const sp = Math.hypot(p.vx, p.vy);
         if (sp > 0.4) {
-          ctx.strokeStyle = p.team === 'blue' ? 'rgba(75,156,245,.4)' : 'rgba(242,86,76,.4)';
+          ctx.strokeStyle = p.team === 'blue' ? 'rgba(0,0,255,.45)' : 'rgba(255,0,0,.45)';
           ctx.lineWidth = r * 0.8;
           ctx.lineCap = 'round';
           ctx.beginPath();
@@ -138,12 +144,6 @@ export default function Pitch({ stateRef, selectedId, showTargets, onSelect }: P
           ctx.lineTo(x, y);
           ctx.stroke();
         }
-        if (s.ball.holder === p.id) {
-          ctx.beginPath();
-          ctx.arc(x, y, r + 5, 0, Math.PI * 2);
-          ctx.fillStyle = 'rgba(255,255,255,.18)';
-          ctx.fill();
-        }
         if (p.id === selectedId) {
           ctx.beginPath();
           ctx.arc(x, y, r + 8, 0, Math.PI * 2);
@@ -151,13 +151,12 @@ export default function Pitch({ stateRef, selectedId, showTargets, onSelect }: P
           ctx.lineWidth = 2.5;
           ctx.stroke();
         }
+        // No outline and no halo. The ball is drawn on top of whoever has it,
+        // which is marker enough.
         ctx.beginPath();
         ctx.arc(x, y, r, 0, Math.PI * 2);
         ctx.fillStyle = p.team === 'blue' ? BLUE : RED;
         ctx.fill();
-        ctx.lineWidth = 2;
-        ctx.strokeStyle = s.ball.holder === p.id ? '#fff' : 'rgba(0,0,0,.35)';
-        ctx.stroke();
         ctx.fillStyle = '#fff';
         ctx.font = `600 ${Math.round(r * 1.05)}px ui-sans-serif, system-ui, sans-serif`;
         ctx.textAlign = 'center';
