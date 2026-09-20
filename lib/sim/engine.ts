@@ -31,7 +31,7 @@ export const BEAT = 1.5; // seconds between decision rounds
 const ARRIVE_V = 5.0; // m/s a pass should still be doing when it arrives
 const SET_TIME = 0.35; // planting the standing foot
 const DWELL = 0.4; // how long a receiver holds it before looking up
-const CARRY_AHEAD = 0.9; // metres the ball sits in front of a moving carrier
+const CARRY_AHEAD = 0.8; // metres the ball sits in front of whoever has it
 
 const BLUE_SPOTS: Array<[number, number]> = [
   [5, 20],
@@ -217,11 +217,13 @@ const rollBall = (s: MatchState, dt: number): void => {
     // Carried at his feet, just ahead of him when he is moving, and eased into
     // rather than snapped to. Taking control up to CONTROL_R away used to jump
     // the ball onto the player in a single frame, which read as a glitch.
+    // At his feet, in front of whichever way he is facing. Facing is already
+    // eased, so the carry point never swings, and there is no speed threshold
+    // to cross, so the ball never snaps to his centre when he slows down.
     const p = s.players.find((q) => q.id === b.holder)!;
-    const sp = Math.hypot(p.vx, p.vy);
-    const cx = p.x + (sp > 0.2 ? (p.vx / sp) * CARRY_AHEAD : 0);
-    const cy = p.y + (sp > 0.2 ? (p.vy / sp) * CARRY_AHEAD : 0);
-    const k = Math.min(1, dt * 9);
+    const cx = p.x + Math.cos(p.facing) * CARRY_AHEAD;
+    const cy = p.y + Math.sin(p.facing) * CARRY_AHEAD;
+    const k = Math.min(1, dt * 14);
     b.x += (cx - b.x) * k;
     b.y += (cy - b.y) * k;
     b.vx = 0;

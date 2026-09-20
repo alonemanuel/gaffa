@@ -87,14 +87,13 @@ body {
   .pulse { animation-duration: 1ms; }
 }
 
-/* Play and pause flash in the middle, then get out of the way. */
+/* Play and pause flash where the tap landed, then get out of the way. The
+   left and top come from the tap, so the translate has to stay in every
+   keyframe or the glyph would jump to the corner as it animates. */
 .midflash {
   position: absolute;
-  top: 50%;
-  left: 50%;
-  width: 74px;
-  height: 74px;
-  margin: -37px 0 0 -37px;
+  width: 68px;
+  height: 68px;
   display: flex;
   align-items: center;
   justify-content: center;
@@ -109,9 +108,9 @@ body {
   height: 30px;
 }
 @keyframes midflash {
-  0% { opacity: 0; transform: scale(0.75); }
-  18% { opacity: 1; transform: scale(1); }
-  100% { opacity: 0; transform: scale(1.22); }
+  0% { opacity: 0; transform: translate(-50%, -50%) scale(0.75); }
+  18% { opacity: 1; transform: translate(-50%, -50%) scale(1); }
+  100% { opacity: 0; transform: translate(-50%, -50%) scale(1.22); }
 }
 @media (prefers-reduced-motion: reduce) {
   .midflash { animation-duration: 1ms; }

@@ -63,7 +63,9 @@ export default function Page() {
   const [edge, setEdge] = useState<{ key: number; n: number } | null>(null);
   const burst = useRef({ n: 0, at: 0 });
   /** Centre flash after a play or pause tap. */
-  const [mid, setMid] = useState<{ key: number; playing: boolean } | null>(null);
+  const [mid, setMid] = useState<{ key: number; playing: boolean; x: number; y: number } | null>(
+    null,
+  );
 
   /** One decision round for every player whose intent is open. */
   const runBeat = useCallback(async () => {
@@ -213,8 +215,8 @@ export default function Page() {
           selectedId={selectedId}
           running={running}
           onSelect={onSelect}
-          onTogglePlay={() => {
-            setMid({ key: Date.now(), playing: !running });
+          onTogglePlay={(px, py) => {
+            setMid({ key: Date.now(), playing: !running, x: px, y: py });
             setRunning(!running);
           }}
           onStep={stepBeat}
@@ -228,7 +230,12 @@ export default function Page() {
           </div>
         )}
         {mid && (
-          <div className="midflash" key={mid.key} aria-hidden="true">
+          <div
+            className="midflash"
+            key={mid.key}
+            style={{ left: mid.x, top: mid.y }}
+            aria-hidden="true"
+          >
             {mid.playing ? <PlayIcon /> : <PauseIcon />}
           </div>
         )}

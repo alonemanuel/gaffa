@@ -19,7 +19,8 @@ interface Props {
   selectedId: string | null;
   running: boolean;
   onSelect: (p: Player | null) => void;
-  onTogglePlay: () => void;
+  /** Given where on the canvas the tap landed, in CSS pixels. */
+  onTogglePlay: (px: number, py: number) => void;
   onStep: () => void;
 }
 
@@ -514,7 +515,7 @@ export default function Pitch({
         return;
       }
       if (px > v.w * (1 - STEP_ZONE)) cb.current.onStep();
-      else cb.current.onTogglePlay();
+      else cb.current.onTogglePlay(px, py);
     };
 
     resize();
