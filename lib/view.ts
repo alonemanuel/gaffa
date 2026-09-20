@@ -86,9 +86,12 @@ export const buildView = (s: MatchState, p: Player): PlayerView => {
 const OFF_BALL_PER_BEAT = 4;
 
 export const decidingPlayers = (s: MatchState): Player[] => {
-  const open = s.players.filter((p) => !p.gk && p.id !== s.ball.to);
-  const carrier = open.filter((p) => p.id === s.ball.holder);
-  const rest = open.filter((p) => p.id !== s.ball.holder);
+  // Whoever has the ball is always asked, keeper included. Leaving him out
+  // means nobody ever decides what to do with it and the match stops dead.
+  const carrier = s.players.filter((p) => p.id === s.ball.holder);
+  const rest = s.players.filter(
+    (p) => !p.gk && p.id !== s.ball.to && p.id !== s.ball.holder,
+  );
 
   const start = (s.beat * OFF_BALL_PER_BEAT) % Math.max(rest.length, 1);
   const rotated = [...rest.slice(start), ...rest.slice(0, start)];

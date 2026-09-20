@@ -31,6 +31,7 @@ export const BEAT = 1.5; // seconds between decision rounds
 const ARRIVE_V = 5.0; // m/s a pass should still be doing when it arrives
 const SET_TIME = 0.35; // planting the standing foot
 const DWELL = 0.4; // how long a receiver holds it before looking up
+const CARRY_AHEAD = 0.9; // metres the ball sits in front of a moving carrier
 
 const BLUE_SPOTS: Array<[number, number]> = [
   [5, 20],
@@ -74,6 +75,7 @@ export const newMatch = (): MatchState => {
         y,
         vx: 0,
         vy: 0,
+        facing: team === 'blue' ? 0 : Math.PI,
         anchor: { x, y },
         belief: {
           distToBallM: 0,
@@ -172,13 +174,14 @@ export const forceIntents = (s: MatchState): void => {
 };
 
 /** Strike the ball at a point, with the pace to arrive properly. */
-const kick = (s: MatchState, from: Player, aim: { x: number; y: number }): void => {
-  const d = Math.max(1, Math.hypot(aim.x - from.x, aim.y - from.y));
+const kick = (s: MatchState, _from: Player, aim: { x: number; y: number }): void => {
+  // Struck from where the ball is sitting, so it never jumps to the passer.
+  const ox = s.ball.x;
+  const oy = s.ball.y;
+  const d = Math.max(1, Math.hypot(aim.x - ox, aim.y - oy));
   const v0 = solveKick(d, ARRIVE_V);
-  s.ball.x = from.x;
-  s.ball.y = from.y;
-  s.ball.vx = ((aim.x - from.x) / d) * v0;
-  s.ball.vy = ((aim.y - from.y) / d) * v0;
+  s.ball.vx = ((aim.x - ox) / d) * v0;
+  s.ball.vy = ((aim.y - oy) / d) * v0;
   s.ball.holder = null;
   s.ball.struckAt = s.clock;
 };
@@ -211,9 +214,16 @@ export const startPass = (s: MatchState, from: Player, to: Player, weight: numbe
 const rollBall = (s: MatchState, dt: number): void => {
   const b = s.ball;
   if (b.holder) {
+    // Carried at his feet, just ahead of him when he is moving, and eased into
+    // rather than snapped to. Taking control up to CONTROL_R away used to jump
+    // the ball onto the player in a single frame, which read as a glitch.
     const p = s.players.find((q) => q.id === b.holder)!;
-    b.x = p.x;
-    b.y = p.y;
+    const sp = Math.hypot(p.vx, p.vy);
+    const cx = p.x + (sp > 0.2 ? (p.vx / sp) * CARRY_AHEAD : 0);
+    const cy = p.y + (sp > 0.2 ? (p.vy / sp) * CARRY_AHEAD : 0);
+    const k = Math.min(1, dt * 9);
+    b.x += (cx - b.x) * k;
+    b.y += (cy - b.y) * k;
     b.vx = 0;
     b.vy = 0;
     return;
@@ -299,8 +309,9 @@ export const tick = (s: MatchState, dt: number): TickEvent | null => {
       forceIntents(s);
       return { kind: 'received', at: s.clock, text: `${to.team} #${to.shirt} takes it down` };
     }
-    // A pass that died short and was never collected.
-    if (s.clock - b.struckAt > 6) {
+    // A pass that died short and was never collected. Kept short, because
+    // while the ball is loose nobody is deciding anything.
+    if (s.clock - b.struckAt > 2.5) {
       const near = s.players
         .filter((q) => !q.gk)
         .sort((x, y) => dist(x, b) - dist(y, b))[0];

@@ -1,26 +1,18 @@
 'use client';
 
 /**
- * The match loop.
+ * The match loop and the shell around it.
  *
  * Physics runs at 120Hz in a ref, outside React, because re-rendering 14
- * players sixty times a second would be absurd. React only owns the chrome:
- * the clock, the buttons and the inspector.
+ * players sixty times a second would be absurd. React owns only the chrome.
  *
- * A beat fires about once a second. While a decision round is in flight the
- * clock slows rather than stalling, and everyone carries on executing the
- * intent they already had. Real players commit to a run too.
+ * A beat fires every 1.5s. While a decision round is in flight the clock slows
+ * rather than stalling, and everyone carries on executing the intent they
+ * already had. Real players commit to a run too.
  */
 
 import { useCallback, useEffect, useRef, useState } from 'react';
-import {
-  PauseIcon,
-  PlayIcon,
-  ResetIcon,
-  RunsIcon,
-  SpeedIcon,
-  StepIcon,
-} from '@/components/Icons';
+import { PauseIcon, PlayIcon, ResetIcon } from '@/components/Icons';
 import Inspector from '@/components/Inspector';
 import PitchView from '@/components/Pitch';
 import {
@@ -34,34 +26,44 @@ import {
   startPass,
   tick,
 } from '@/lib/sim/engine';
+import { PITCH } from '@/lib/pitch';
 import { buildView, decidingPlayers } from '@/lib/view';
 import type { DecideResponse, MatchState, Player } from '@/lib/types';
 
-interface LogLine {
-  at: number;
-  text: string;
-}
+/** Taps on the edge this close together count as one burst. */
+const BURST_MS = 800;
+
+/** How much of the window the pitch may take, as the grip is dragged. */
+const MIN_PITCH = 0.3;
+const MAX_PITCH = 0.98;
+/** Within this much of the natural height, the grip snaps to it. */
+const SNAP = 0.03;
 
 export default function Page() {
   const stateRef = useRef<MatchState>(newMatch());
   const inFlight = useRef(false);
   const lastBeat = useRef(-99);
+  const wrapRef = useRef<HTMLElement>(null);
 
   const [running, setRunning] = useState(true);
-  const [speed, setSpeed] = useState(1);
-  const [showTargets, setShowTargets] = useState(false);
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [selected, setSelected] = useState<Player | null>(null);
   const [hud, setHud] = useState({ clock: 0, passes: 0, beat: 0 });
   const [source, setSource] = useState<'jev' | 'mock' | 'none'>('none');
   const [latency, setLatency] = useState(0);
   const [thinking, setThinking] = useState(false);
-  const [err, setErr] = useState<string | null>(null);
-  const [log, setLog] = useState<LogLine[]>([]);
-
-  const push = useCallback((at: number, text: string) => {
-    setLog((l) => [{ at, text }, ...l].slice(0, 3));
-  }, []);
+  /**
+   * Pitch height as a fraction of the window. Null means the natural height,
+   * where the pitch fills the width exactly and there is no black either side.
+   * That is where it opens, and the grip snaps back to it.
+   */
+  const [split, setSplit] = useState<number | null>(null);
+  const [natural, setNatural] = useState(0.68);
+  /** Edge flash after a step, and the running count of a fast burst of taps. */
+  const [edge, setEdge] = useState<{ key: number; n: number } | null>(null);
+  const burst = useRef({ n: 0, at: 0 });
+  /** Centre flash after a play or pause tap. */
+  const [mid, setMid] = useState<{ key: number; playing: boolean } | null>(null);
 
   /** One decision round for every player whose intent is open. */
   const runBeat = useCallback(async () => {
@@ -73,8 +75,7 @@ export default function Page() {
 
     const carrier = carrierOf(s);
     const carrierId = s.ball.holder;
-    const who = decidingPlayers(s);
-    const views = who.map((p) => buildView(s, p));
+    const views = decidingPlayers(s).map((p) => buildView(s, p));
 
     try {
       const r = await fetch('/api/decide', {
@@ -87,27 +88,23 @@ export default function Page() {
       applyDecision(s, res);
       setSource(res.source);
       setLatency(res.latencyMs);
-      setErr(res.error ?? null);
       s.beat += 1;
 
-      // Play the pass the man on the ball asked for.
       if (res.onBall && carrier && canPassNow(s) && s.ball.holder === carrierId) {
         if (res.onBall.passToShirt !== null) {
           const to = s.players.find(
             (p) => p.team === carrier.team && p.shirt === res.onBall!.passToShirt,
           );
           if (to) startPass(s, carrier, to, res.onBall.weight);
-        } else {
-          push(s.clock, `${carrier.team} #${carrier.shirt} holds it, nobody is on`);
         }
       }
-    } catch (e) {
-      setErr(e instanceof Error ? e.message : String(e));
+    } catch {
+      // A failed round leaves everyone on the intent they already had.
     } finally {
       inFlight.current = false;
       setThinking(false);
     }
-  }, [push]);
+  }, []);
 
   /* --- the loop ---------------------------------------------------------- */
   useEffect(() => {
@@ -125,13 +122,11 @@ export default function Page() {
       const s = stateRef.current;
 
       if (running) {
-        // Slow down rather than stall while a round is in flight.
-        acc += dt * speed * (inFlight.current ? 0.35 : 1);
+        acc += dt * (inFlight.current ? 0.35 : 1);
         let guard = 0;
         while (acc >= TICK && guard++ < 600) {
-          const ev = tick(s, TICK);
+          tick(s, TICK);
           acc -= TICK;
-          if (ev) push(ev.at, ev.text);
         }
         if (s.clock - lastBeat.current >= BEAT && !inFlight.current) {
           lastBeat.current = s.clock;
@@ -148,43 +143,109 @@ export default function Page() {
 
     raf = requestAnimationFrame(frame);
     return () => cancelAnimationFrame(raf);
-  }, [running, speed, selectedId, runBeat, push]);
+  }, [running, selectedId, runBeat]);
 
-  /** Advance exactly one decision round while paused. */
+  /* --- controls ---------------------------------------------------------- */
   const stepBeat = useCallback(() => {
+    // Taps inside the window add up, so a quick double tap reads "2 beats"
+    // rather than flashing "1 beat" twice.
+    const now = Date.now();
+    const n = now - burst.current.at < BURST_MS ? burst.current.n + 1 : 1;
+    burst.current = { n, at: now };
+    setEdge({ key: now, n });
     setRunning(false);
     const s = stateRef.current;
     const until = s.clock + BEAT;
-    while (s.clock < until) {
-      const ev = tick(s, TICK);
-      if (ev) push(ev.at, ev.text);
-    }
+    while (s.clock < until) tick(s, TICK);
     lastBeat.current = s.clock;
     void runBeat();
-  }, [runBeat, push]);
+  }, [runBeat]);
 
   const onSelect = useCallback((p: Player | null) => {
     setSelectedId(p?.id ?? null);
     setSelected(p);
-    if (p) setRunning(false);
   }, []);
+
+  const reset = useCallback(() => {
+    stateRef.current = newMatch();
+    lastBeat.current = -99;
+    setSelectedId(null);
+    setSelected(null);
+    setRunning(true);
+  }, []);
+
+  /* --- the natural height, where the pitch fills the width exactly -------- */
+  useEffect(() => {
+    const measure = () => {
+      const el = wrapRef.current;
+      if (!el || !el.clientHeight) return;
+      const want = (el.clientWidth * (PITCH.L / PITCH.W)) / el.clientHeight;
+      setNatural(Math.min(MAX_PITCH, Math.max(MIN_PITCH, want)));
+    };
+    measure();
+    window.addEventListener('resize', measure);
+    return () => window.removeEventListener('resize', measure);
+  }, []);
+
+  /* --- the drag between pitch and panel ---------------------------------- */
+  const onGrip = useCallback((e: React.PointerEvent<HTMLDivElement>) => {
+    e.currentTarget.setPointerCapture(e.pointerId);
+    const move = (ev: PointerEvent) => {
+      const h = wrapRef.current?.clientHeight ?? window.innerHeight;
+      const next = Math.min(MAX_PITCH, Math.max(MIN_PITCH, ev.clientY / h));
+      setSplit(Math.abs(next - natural) < SNAP ? null : next);
+    };
+    const up = () => {
+      window.removeEventListener('pointermove', move);
+      window.removeEventListener('pointerup', up);
+    };
+    window.addEventListener('pointermove', move);
+    window.addEventListener('pointerup', up);
+  }, [natural]);
 
   const mmss = `${Math.floor(hud.clock / 60)}:${String(Math.floor(hud.clock % 60)).padStart(2, '0')}`;
 
   return (
-    <main className="wrap">
-      <div className="stage">
+    <main className="wrap" ref={wrapRef}>
+      <div className="stage" style={{ height: `${(split ?? natural) * 100}%` }}>
         <PitchView
           stateRef={stateRef}
           selectedId={selectedId}
-          showTargets={showTargets}
+          running={running}
           onSelect={onSelect}
+          onTogglePlay={() => {
+            setMid({ key: Date.now(), playing: !running });
+            setRunning(!running);
+          }}
+          onStep={stepBeat}
         />
+        {edge && (
+          <div className="pulse" key={edge.key} aria-hidden="true">
+            <span>&raquo;</span>
+            <em>
+              {edge.n} {edge.n === 1 ? 'beat' : 'beats'}
+            </em>
+          </div>
+        )}
+        {mid && (
+          <div className="midflash" key={mid.key} aria-hidden="true">
+            {mid.playing ? <PlayIcon /> : <PauseIcon />}
+          </div>
+        )}
+        <div className="overlay">
+          <span className={`timer${running ? '' : ' stopped'}`}>{mmss}</span>
+          <button className="reset" onClick={reset} aria-label="Start over" title="Start over">
+            <ResetIcon />
+          </button>
+        </div>
+      </div>
+
+      <div className="grip" onPointerDown={onGrip} role="separator" aria-label="Resize the panel">
+        <i />
       </div>
 
       <section className="info">
         <header className="hud">
-          <span className="clock">{mmss}</span>
           <span className="meta">
             {hud.passes} {hud.passes === 1 ? 'pass' : 'passes'} &middot; beat {hud.beat}
           </span>
@@ -193,70 +254,10 @@ export default function Page() {
             {latency > 0 && source === 'jev' && ` ${latency}ms`}
           </span>
         </header>
-
-        <div className="log">
-          {log.slice(0, 2).map((l, i) => (
-            <div key={`${l.at}-${i}`}>
-              <span className="t">
-                {Math.floor(l.at / 60)}:{String(Math.floor(l.at % 60)).padStart(2, '0')}
-              </span>{' '}
-              {l.text}
-            </div>
-          ))}
+        <div className="scroll">
+          <Inspector player={selected} />
         </div>
-
-        {source === 'mock' && (
-          <p className="warn">
-            Stand-in model{err ? `: ${err}` : '. Connect the AI Gateway to let Jev decide.'}
-          </p>
-        )}
       </section>
-
-      <nav className="bar">
-        <button
-          onClick={() => setRunning((r) => !r)}
-          className={running ? '' : 'on'}
-          aria-label={running ? 'Pause' : 'Play'}
-          title={running ? 'Pause' : 'Play'}
-        >
-          {running ? <PauseIcon /> : <PlayIcon />}
-        </button>
-        <button
-          onClick={() => setSpeed((s) => (s === 1 ? 2 : s === 2 ? 0.5 : 1))}
-          aria-label={`Speed, currently ${speed} times`}
-          title="Speed"
-        >
-          <SpeedIcon />
-          <span className="val">{speed}&times;</span>
-        </button>
-        <button onClick={stepBeat} aria-label="Step one decision round" title="Step one round">
-          <StepIcon />
-        </button>
-        <button
-          onClick={() => setShowTargets((v) => !v)}
-          className={showTargets ? 'on' : ''}
-          aria-pressed={showTargets}
-          aria-label="Show where everyone is running to"
-          title="Show runs"
-        >
-          <RunsIcon />
-        </button>
-        <button
-          onClick={() => {
-            stateRef.current = newMatch();
-            lastBeat.current = -99;
-            setLog([]);
-            setSelectedId(null);
-            setSelected(null);
-          }}
-          aria-label="Reset the match"
-          title="Reset"
-        >
-          <ResetIcon />
-        </button>
-      </nav>
-
-      <Inspector player={selected} onClose={() => onSelect(null)} />
     </main>
   );
 }

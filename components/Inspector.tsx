@@ -1,11 +1,11 @@
 'use client';
 
 /**
- * Pause and read a player's mind.
+ * The bottom panel. Empty until a player is tapped, then it holds everything
+ * that applies to him: what he believes, the job he was given, what he decided
+ * to do about it, every alternative he weighed, and how that becomes movement.
  *
- * Belief, task and intent, in that order, plus the full probability
- * distribution the decision model returned. Every number here is the one the
- * engine actually acted on.
+ * Every number here is the one the engine actually acted on.
  */
 
 import { INTENT_TEXT } from '@/lib/types';
@@ -13,40 +13,43 @@ import type { Intent, Player } from '@/lib/types';
 
 interface Props {
   player: Player | null;
-  onClose: () => void;
 }
 
 const pct = (n: number) => `${Math.round(n * 100)}%`;
 const label = (k: string) => k.replace(/_/g, ' ');
-
 const DANGER = ['comfortable', 'under some pressure', 'about to lose it'];
 
-export default function Inspector({ player, onClose }: Props) {
-  if (!player) return null;
+export default function Inspector({ player }: Props) {
+  if (!player) {
+    return (
+      <div className="empty">
+        <p>Tap a player to read his mind.</p>
+        <p className="hint">
+          Tap the grass to play or pause, the right edge to step one round.
+        </p>
+      </div>
+    );
+  }
+
   const p = player;
   const rows = Object.entries(p.intentProbs).sort((a, b) => b[1] - a[1]);
 
   return (
-    <aside className="sheet" role="dialog" aria-label={`${p.team} number ${p.shirt}`}>
-      <button className="sheet-close" onClick={onClose} aria-label="Close">
-        &times;
-      </button>
-
+    <div className="panel">
       <h2>
         <span className={`dot ${p.team}`} /> {p.team} #{p.shirt}
+        <span className="src">
+          {p.intentSource}
+          {p.intentConfidence > 0 && ` · ${pct(p.intentConfidence)} sure`}
+        </span>
       </h2>
-      <p className="sub">
-        Decided by <strong>{p.intentSource}</strong>
-        {p.intentConfidence > 0 && ` at ${pct(p.intentConfidence)} confidence`}
-      </p>
 
       <div className="tier">Belief, what he thinks is true</div>
       <dl className="kv">
         <div>
           <dt>Ball</dt>
           <dd>
-            {p.belief.distToBallM.toFixed(1)}m away, about{' '}
-            {p.belief.timeToBallS.toFixed(1)}s for him
+            {p.belief.distToBallM.toFixed(1)}m, about {p.belief.timeToBallS.toFixed(1)}s for him
           </dd>
         </div>
         <div>
@@ -80,6 +83,9 @@ export default function Inspector({ player, onClose }: Props) {
               {rows.map(([k, v]) => (
                 <tr key={k} className={k === p.intent ? 'pick' : ''}>
                   <td>{label(k)}</td>
+                  <td className="bar">
+                    <i style={{ width: `${Math.max(2, v * 100)}%` }} />
+                  </td>
                   <td className="num">{pct(v)}</td>
                 </tr>
               ))}
@@ -103,6 +109,6 @@ export default function Inspector({ player, onClose }: Props) {
           </dd>
         </div>
       </dl>
-    </aside>
+    </div>
   );
 }

@@ -194,9 +194,23 @@ export const motorTarget = (s: MatchState, p: Player): MotorTarget => {
   }
 };
 
+/** How quickly a player's head comes round, in radians per second. */
+const TURN = 6;
+
 /** Move everyone toward their target, under a speed and acceleration cap. */
 export const moveAll = (s: MatchState, dt: number): void => {
   for (const p of s.players) {
+    // Face the way you are going, or the ball when you are standing still.
+    const sp = Math.hypot(p.vx, p.vy);
+    const want =
+      sp > 0.6
+        ? Math.atan2(p.vy, p.vx)
+        : Math.atan2(s.ball.y - p.y, s.ball.x - p.x);
+    let turn = want - p.facing;
+    while (turn > Math.PI) turn -= Math.PI * 2;
+    while (turn < -Math.PI) turn += Math.PI * 2;
+    p.facing += turn * Math.min(1, dt * TURN);
+
     const dx = p.targetX - p.x;
     const dy = p.targetY - p.y;
     const d = Math.hypot(dx, dy);

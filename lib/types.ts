@@ -91,6 +91,11 @@ export interface Player {
   y: number;
   vx: number;
   vy: number;
+  /**
+   * Where he is looking, in radians in pitch coordinates. A player faces the
+   * way he is running, and when he is standing still he faces the ball.
+   */
+  facing: number;
   anchor: Vec;
 
   /** BDI. */
