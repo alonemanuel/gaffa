@@ -272,24 +272,27 @@ export default function Pitch({
         }
       }
 
-      const r = Math.max(9, 1.35 * sc);
+      // A player reads as about a metre across, which leaves the pitch open
+      // enough to see shape rather than a field of discs.
+      const r = Math.max(7, 1.02 * sc);
       for (const p of s.players) {
         const x = sx(p);
         const y = sy(p);
         if (p.id === sel) {
           ctx.beginPath();
-          ctx.arc(x, y, r + 7, 0, Math.PI * 2);
+          ctx.arc(x, y, r + 6, 0, Math.PI * 2);
           ctx.strokeStyle = '#ffd166';
           ctx.lineWidth = 2.5;
           ctx.stroke();
         }
-        // A plain disc with a small arrowhead on the rim, pointing where he is
-        // looking. Pitch x runs up the screen and pitch y across it, so the
-        // heading has to be turned into screen space first.
+        // A disc in the team's colour, outlined in white, with a small white
+        // arrowhead on the rim pointing where he is looking. Pitch x runs up
+        // the screen and pitch y across it, so the heading has to be turned
+        // into screen space first.
         const phi = Math.atan2(-Math.cos(p.facing), Math.sin(p.facing));
 
-        // The man in possession glows, so you can see who has it at a glance.
-        // A hard ring is reserved for the player you have selected.
+        // The man in possession glows. A hard ring is reserved for the player
+        // you have selected.
         const carrying = s.ball.holder === p.id;
         if (carrying) {
           ctx.shadowColor = 'rgba(255,255,255,0.95)';
@@ -299,23 +302,27 @@ export default function Pitch({
         ctx.beginPath();
         ctx.arc(x, y, r, 0, Math.PI * 2);
         ctx.fill();
+        if (carrying) {
+          ctx.fill(); // a second pass, to deepen the glow
+          ctx.shadowBlur = 0;
+        }
 
-        const tip = r * 1.42;
-        const base = r * 0.92;
-        const spread = 0.42;
+        ctx.strokeStyle = '#ffffff';
+        ctx.lineWidth = Math.max(1.4, r * 0.14);
+        ctx.beginPath();
+        ctx.arc(x, y, r, 0, Math.PI * 2);
+        ctx.stroke();
+
+        const tip = r * 1.34;
+        const base = r * 0.98;
+        const spread = 0.32;
+        ctx.fillStyle = '#ffffff';
         ctx.beginPath();
         ctx.moveTo(x + Math.cos(phi) * tip, y + Math.sin(phi) * tip);
         ctx.lineTo(x + Math.cos(phi + spread) * base, y + Math.sin(phi + spread) * base);
         ctx.lineTo(x + Math.cos(phi - spread) * base, y + Math.sin(phi - spread) * base);
         ctx.closePath();
         ctx.fill();
-        if (carrying) {
-          // A second pass deepens the glow without washing out the shirt.
-          ctx.beginPath();
-          ctx.arc(x, y, r, 0, Math.PI * 2);
-          ctx.fill();
-          ctx.shadowBlur = 0;
-        }
 
         ctx.fillStyle = '#fff';
         ctx.font = `600 ${Math.round(r * 1.05)}px ui-sans-serif, system-ui, sans-serif`;
