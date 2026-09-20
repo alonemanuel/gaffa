@@ -292,6 +292,22 @@ export default function Pitch({
         // into screen space first.
         const phi = Math.atan2(-Math.cos(p.facing), Math.sin(p.facing));
 
+        // The faintest shadow, offset the same way as the ball's, so both are
+        // lit from the top left. Enough to lift him off the grass, not enough
+        // to read as a second marker.
+        const sr = r * 1.1;
+        const shade = ctx.createRadialGradient(
+          x + r * 0.3, y + r * 0.36, 0,
+          x + r * 0.3, y + r * 0.36, sr,
+        );
+        shade.addColorStop(0, 'rgba(0,0,0,0.26)');
+        shade.addColorStop(0.6, 'rgba(0,0,0,0.15)');
+        shade.addColorStop(1, 'rgba(0,0,0,0)');
+        ctx.fillStyle = shade;
+        ctx.beginPath();
+        ctx.arc(x + r * 0.3, y + r * 0.36, sr, 0, Math.PI * 2);
+        ctx.fill();
+
         // The man in possession glows. A hard ring is reserved for the player
         // you have selected.
         const carrying = s.ball.holder === p.id;
